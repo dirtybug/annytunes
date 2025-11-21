@@ -4,9 +4,10 @@ import android.content.Context;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
+import android.util.Log;
+
 import com.felhr.usbserial.UsbSerialDevice;
 import com.felhr.usbserial.UsbSerialInterface;
-import android.util.Log;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -32,7 +33,7 @@ public class AnytoneUart implements AutoCloseable {
     static final int FRAME_HEADER_LEN = 7; // 'W' + addr(4) + size + checksum
 
     private static AnytoneUart instance; // singleton instance
-    private String selector; // remember selector used
+    private final String selector; // remember selector used
 
     // Protocol state fields restored for CommsThread parsing access
     public boolean framed;
@@ -69,7 +70,8 @@ public class AnytoneUart implements AutoCloseable {
         public void onReceivedData(byte[] data) {
             if (data == null || data.length == 0) return;
             // Forward to communications thread reply queue
-            CommsThread.getObj().enqueueIncoming(data);
+            CommsThread.getObj();
+            CommsThread.enqueueIncoming(data);
             // Retain local buffer for any legacy direct reads (optional)
             synchronized (rxLock) {
                 ensureCapacity(rxCount + data.length);

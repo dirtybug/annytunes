@@ -1,4 +1,4 @@
-package com.app.annytunes.uart;
+package com.app.annytunes.uart.channels;
 
 public class Channel {
     public String name;       // ASCII (model-dependent length, commonly 16)

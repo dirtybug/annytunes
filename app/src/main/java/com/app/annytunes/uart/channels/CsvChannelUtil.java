@@ -1,8 +1,17 @@
-package com.app.annytunes.uart;
+package com.app.annytunes.uart.channels;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public class CsvChannelUtil {
 	public static void write(List<Channel> list, File f) throws IOException {

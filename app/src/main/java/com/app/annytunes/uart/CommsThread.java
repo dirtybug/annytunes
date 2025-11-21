@@ -2,8 +2,13 @@ package com.app.annytunes.uart;
 
 import android.util.Log;
 
-import com.app.annytunes.ui.MainActivity;
+import com.app.annytunes.uart.channels.Channel;
+import com.app.annytunes.uart.channels.ChannelIo;
+import com.app.annytunes.uart.zonelistchannels.ZoneChannelsIo;
+import com.app.annytunes.uart.zones.Zone;
+import com.app.annytunes.uart.zones.ZoneIo;
 import com.app.annytunes.ui.ChannelTransferActivity;
+import com.app.annytunes.ui.MainActivity;
 
 import java.io.IOException;
 import java.util.List;
@@ -21,10 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class CommsThread extends Thread {
 
 
-    // =====================================================================================
-    // Types
-    // =====================================================================================
-    private enum Kind {READ_DECODE, WRITE, POISON, ENTER_PC_MODE, HANDSHAKE, EXIT_PC_MODE, COMMIT_WRITE, ERASE_BLOCK}
+    private final java.util.concurrent.atomic.AtomicInteger zoneSoFar = new java.util.concurrent.atomic.AtomicInteger(0);
 
     private static final class Task {
         final Kind kind;
@@ -91,6 +93,22 @@ public class CommsThread extends Thread {
     private final BlockingQueue<byte[]> inboundQueue = new LinkedBlockingQueue<>();
     private byte[] pendingChunk;
     private int pendingPos;
+    private final java.util.concurrent.atomic.AtomicInteger zoneChanSoFar = new java.util.concurrent.atomic.AtomicInteger(0);
+    private int zoneTotalExpected;
+    private int zoneChanTotalExpected;
+
+    // Small helper to format hex for debug (truncated if too long)
+    private static String bytesHex(byte[] arr, int max) {
+        if (arr == null) return "<null>";
+        int lim = Math.min(arr.length, max <= 0 ? arr.length : max);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lim; i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(String.format("%02X", arr[i] & 0xFF));
+        }
+        if (lim < arr.length) sb.append(" …");
+        return sb.toString();
+    }
 
 
     // =====================================================================================
@@ -144,6 +162,25 @@ public class CommsThread extends Thread {
 
     public void submitPoison() throws InterruptedException {
         tasks.put(new Task(Kind.POISON, 0L, null, -1, -1, null));
+    }
+
+    public void submitZoneRead(int zoneIndex1Based) throws InterruptedException {
+        ensureAccepting();
+        long addr = ZoneIo.addressOfZone(zoneIndex1Based);
+        outstanding.incrementAndGet();
+        tasks.put(new Task(Kind.ZONE_READ, addr, null, 1, ZoneIo.DEFAULT_ZONE_RECORD_SIZE, null));
+        if (ChannelIo.DEBUG)
+            android.util.Log.d(TAG, "[zone] start read index=" + zoneIndex1Based + " addr=0x" + String.format("%08X", (int) addr));
+    }
+
+    public void submitZoneChannels(int zoneIndex1Based) throws InterruptedException {
+        ensureAccepting();
+        long addr = ZoneChannelsIo.addressOf(zoneIndex1Based);
+        outstanding.incrementAndGet();
+        zoneChanTotalExpected++;
+        tasks.put(new Task(Kind.ZONE_CHANNELS_READ, addr, null, 1, ZoneChannelsIo.RECORD_SIZE, null));
+        if (ChannelIo.DEBUG)
+            android.util.Log.d(TAG, "[zone-ch] start read index=" + zoneIndex1Based + " addr=0x" + String.format("%08X", (int) addr));
     }
 
     public List<Channel> takeDecoded() throws IOException, InterruptedException {
@@ -261,6 +298,14 @@ public class CommsThread extends Thread {
                             break;
                         case ERASE_BLOCK:
                             completeIfFuture(t, doEraseBlock(t.addr));
+                            break;
+                        case ZONE_READ:
+                            doZoneRead(t.addr, t.recSize);
+                            completeIfFuture(t, null);
+                            break;
+                        case ZONE_CHANNELS_READ:
+                            doZoneChannelsRead(t.addr, t.recSize);
+                            completeIfFuture(t, null);
                             break;
                         default:
                             break;
@@ -499,9 +544,17 @@ public class CommsThread extends Thread {
         ensureUart().writeBytes(frame);
         int expect = AnytoneUart.FRAME_HEADER_LEN + len + 1;
         byte[] resp = readExact(expect, 4000);
+        if (ChannelIo.DEBUG) {
+            android.util.Log.d(TAG, String.format("[rx] addr=0x%08X len=%d expect=%d raw=%s", (int) addr, len, expect, bytesHex(resp, 64)));
+        }
         if (resp.length < expect)
             throw new IOException("short read frame: got=" + resp.length + " exp>=" + expect);
         return parseFrame(addr, resp, len);
+    }
+
+    public void setZoneTotalExpected(int total) {
+        this.zoneTotalExpected = total;
+        zoneSoFar.set(0);
     }
 
     private void doWrite(long baseAddr, byte[] buf) throws IOException {
@@ -582,6 +635,53 @@ public class CommsThread extends Thread {
         try { ChannelTransferActivity.getObj().onEnterPcMode(ok, msg); } catch (Throwable ignored) {}
         try { MainActivity.getObj().onEnterPcMode(ok, msg); } catch (Throwable ignored) {}
     }
+
+    private void doZoneRead(long addr, int recSize) throws IOException {
+        byte[] raw = readMem(addr, recSize);
+        if (ChannelIo.DEBUG)
+            android.util.Log.d(TAG, String.format("[zone-rx] addr=0x%08X raw=%s", (int) addr, bytesHex(raw, 64)));
+        Zone z = ZoneIo.decodeZone(raw);
+        int zoneIndex = (int) (((addr - ZoneIo.DEFAULT_ZONE_BASE) / ZoneIo.DEFAULT_ZONE_RECORD_SIZE) + 1);
+        z.channelNumbers = ZoneChannelsIo.getChannels(zoneIndex);
+        int soFar = zoneSoFar.incrementAndGet();
+        try {
+            com.app.annytunes.ui.ZoneActivity act = com.app.annytunes.ui.ZoneActivity.getObj();
+            java.util.List<Zone> one = java.util.Collections.singletonList(z);
+            try {
+                act.onZonesDecoded(one, soFar, zoneTotalExpected);
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignoredOuter) {
+        }
+    }
+
+    private void doZoneChannelsRead(long addr, int recSize) throws IOException {
+        int size = ZoneChannelsIo.RECORD_SIZE;
+        byte[] full = new byte[size];
+        int off = 0;
+        while (off < size) {
+            int want = Math.min(0xFF, size - off);
+            byte[] part = readMem(addr + off, want);
+            if (part.length != want)
+                throw new IOException("short zone channels read exp=" + want + " got=" + part.length);
+            System.arraycopy(part, 0, full, off, want);
+            off += want;
+        }
+        int zoneIndex = (int) (((addr - ZoneChannelsIo.BASE_ADDRESS) / ZoneChannelsIo.RECORD_STRIDE) + 1);
+        ZoneChannelsIo.decode(zoneIndex, full);
+        int soFar = zoneChanSoFar.incrementAndGet();
+        if (ChannelIo.DEBUG)
+            android.util.Log.d(TAG, String.format("[zone-ch-rx] zone=%d size=%d progress %d/%d", zoneIndex, size, soFar, zoneChanTotalExpected));
+        try {
+            com.app.annytunes.ui.ZoneActivity.getObj().onZoneChannelsDecoded(zoneIndex);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // =====================================================================================
+    // Types
+    // =====================================================================================
+    private enum Kind {READ_DECODE, WRITE, POISON, ENTER_PC_MODE, HANDSHAKE, EXIT_PC_MODE, COMMIT_WRITE, ERASE_BLOCK, ZONE_READ, ZONE_CHANNELS_READ}
 
 
 }

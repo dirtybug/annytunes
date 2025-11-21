@@ -1,5 +1,6 @@
 package com.app.annytunes.ui;
 
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -8,17 +9,17 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.graphics.Color;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.app.annytunes.uart.AnytoneUart;
-import com.app.annytunes.uart.CsvChannelUtil;
-import com.app.annytunes.uart.Channel;
-import com.app.annytunes.uart.ChannelIo;
 import com.app.annytunes.uart.CommsThread;
+import com.app.annytunes.uart.channels.Channel;
+import com.app.annytunes.uart.channels.ChannelIo;
+import com.app.annytunes.uart.channels.CsvChannelUtil;
 import com.app.anytunes.R;
 
 import java.io.File;
@@ -338,5 +339,20 @@ public class ChannelTransferActivity extends AppCompatActivity {
                 btnEnterPcMode.setEnabled(true);
             }
         });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        menu.add(0, 1, 0, "Zones");
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == 1) {
+            startActivity(new android.content.Intent(this, ZoneActivity.class));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 }

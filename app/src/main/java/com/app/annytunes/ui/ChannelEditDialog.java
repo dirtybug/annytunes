@@ -2,13 +2,12 @@ package com.app.annytunes.ui;
 
 import android.app.AlertDialog;
 import android.text.InputType;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
-import android.widget.ArrayAdapter;
 
-import com.app.annytunes.uart.Channel;
-import com.app.annytunes.uart.ChannelIo;
+import com.app.annytunes.uart.channels.Channel;
 
 import java.util.Locale;
 

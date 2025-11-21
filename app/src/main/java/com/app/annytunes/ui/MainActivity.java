@@ -1,12 +1,10 @@
 package com.app.annytunes.ui;
 
-import android.Manifest;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
@@ -21,7 +19,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 
 import com.app.anytunes.R;
 
@@ -36,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private Button refreshBtn;
     private Button connectBtn;
     private UsbManager usbManager;
-    private List<UsbDevice> enumeratedDevices = new ArrayList<>();
+    private final List<UsbDevice> enumeratedDevices = new ArrayList<>();
     private PendingIntent usbPermissionIntent;
     private UsbDevice pendingDeviceForPermission;
 
@@ -167,5 +164,15 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             Toast.makeText(this, ok ? "PC Mode OK" : "PC Mode failed: " + message, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        return false;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        return super.onOptionsItemSelected(item);
     }
 }

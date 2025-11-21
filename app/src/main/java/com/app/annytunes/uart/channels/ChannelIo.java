@@ -1,9 +1,13 @@
-package com.app.annytunes.uart;
+package com.app.annytunes.uart.channels;
+
+import android.util.Log;
+
+import com.app.annytunes.uart.Bank;
+import com.app.annytunes.uart.CommsThread;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import android.util.Log;
+
 
 public class ChannelIo {
     private static final String TAG = "ChannelIo";
@@ -124,7 +128,7 @@ public class ChannelIo {
             c.contactId = 0; c.contactName = ""; c.radioIdIndex = 0; c.bandwidthKHz = 0.0; c.admit = ""; c.power = 0;
             return c;
         }
-        long rxHz = bcd4_to_hz(slab, recOff + 0x00);
+        long rxHz = bcd4_to_hz(slab, recOff);
         long shift = bcd4_to_hz(slab, recOff + 0x04);
         c.rxHz = rxHz;
         boolean ts1 = (slab[recOff + 0x34] & 0x08) != 0;
@@ -191,22 +195,22 @@ public class ChannelIo {
             CommsThread comms = CommsThread.getObj();
             final int perChunk = 0xFF / CH_OFFSET;
             int bankCount = getBankCount();
-            try {
-                for (int bank = 0; bank < bankCount; bank++) {
-                    Bank bk = getBank(bank);
-                    long bankBase = bk.address;
-                    int perBank = bk.channels;
-                    for (int i = 0; i < perBank; i += perChunk) {
-                        int recsThis = Math.min(perChunk, perBank - i);
-                        long addrChunk = bankBase + (long) i * CH_OFFSET;
-                        try { comms.submitReadDecode(addrChunk, recsThis, CH_OFFSET); }
-                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted submitting read task", e); }
+            for (int bank = 0; bank < bankCount; bank++) {
+                Bank bk = getBank(bank);
+                long bankBase = bk.address;
+                int perBank = bk.channels;
+                for (int i = 0; i < perBank; i += perChunk) {
+                    int recsThis = Math.min(perChunk, perBank - i);
+                    long addrChunk = bankBase + (long) i * CH_OFFSET;
+                    try {
+                        comms.submitReadDecode(addrChunk, recsThis, CH_OFFSET);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted submitting read task", e);
                     }
                 }
-                // Removed comms.submitPoison(); do not poison thread after reads.
-            } finally {
-                // no-op
             }
+            // Removed comms.submitPoison(); do not poison thread after reads.
         }
     }
 
@@ -246,7 +250,7 @@ public class ChannelIo {
         int nameEnd = recOff + 0x23;
         while (nameEnd < recOff + recSize && slab[nameEnd] != 0) nameEnd++;
         boolean nameEmpty = (nameEnd == recOff + 0x23);
-        long rx = bcd4_to_hz(slab, recOff + 0x00);
+        long rx = bcd4_to_hz(slab, recOff);
         return nameEmpty && rx == 0L;
     }
 
