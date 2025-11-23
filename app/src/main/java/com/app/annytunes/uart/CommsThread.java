@@ -9,6 +9,7 @@ import com.app.annytunes.uart.zones.Zone;
 import com.app.annytunes.uart.zones.ZoneIo;
 import com.app.annytunes.ui.ChannelTransferActivity;
 import com.app.annytunes.ui.MainActivity;
+import com.app.annytunes.ui.ZoneActivity;
 
 import java.io.IOException;
 import java.util.List;
@@ -27,6 +28,7 @@ public class CommsThread extends Thread {
 
 
     private final java.util.concurrent.atomic.AtomicInteger zoneSoFar = new java.util.concurrent.atomic.AtomicInteger(0);
+
 
     private static final class Task {
         final Kind kind;
@@ -153,6 +155,12 @@ public class CommsThread extends Thread {
         tasks.put(new Task(Kind.WRITE, addr, data, 0, 0, null));
     }
 
+    public void submitWriteZoneActivity(long addr, byte[] data) throws InterruptedException {
+        ensureAccepting();
+        writesSubmitted = true;
+        outstanding.incrementAndGet();
+        tasks.put(new Task(Kind.ZONE_WRITE, addr, data, 0, 0, null));
+    }
     public void submitReadDecode(long addr, int recs, int recSize) throws InterruptedException {
         ensureAccepting();
         outstanding.incrementAndGet();
@@ -203,7 +211,7 @@ public class CommsThread extends Thread {
     }
 
 
-    public void commitWriteSync(long timeoutMs) throws IOException, InterruptedException {
+    public void commitWriteSync() throws IOException, InterruptedException {
         awaitSync(Kind.COMMIT_WRITE);
     }
 
@@ -274,6 +282,10 @@ public class CommsThread extends Thread {
                     switch (t.kind) {
                         case WRITE:
                             doWrite(t.addr, t.data);
+                            completeIfFuture(t, Boolean.TRUE);
+                            break;
+                        case ZONE_WRITE:
+                            doZoneWrite(t.addr, t.data);
                             completeIfFuture(t, Boolean.TRUE);
                             break;
                         case READ_DECODE:
@@ -557,6 +569,26 @@ public class CommsThread extends Thread {
         zoneSoFar.set(0);
     }
 
+    private void doZoneWrite(long baseAddr, byte[] buf) throws IOException {
+        if (buf == null) return;
+        int off = 0;
+        while (off < buf.length) {
+            int n = Math.min(16, buf.length - off);
+            byte[] part = (n == buf.length) ? buf : java.util.Arrays.copyOfRange(buf, off, off + n);
+            long addr = baseAddr + off;
+            if (ChannelIo.DEBUG) {
+                Log.d(TAG, String.format("[comms] write frame addr=0x%08X len=%d", (int) addr, n));
+            }
+            boolean ack = writeFrame(addr, part);
+            if (!ack)
+                throw new IOException("no ACK for frame @0x" + String.format("%08X", (int) addr));
+            off += n;
+            ZoneActivity.getObj().progress(off, buf.length);
+
+        }
+        ZoneActivity.getObj().progress(buf.length, buf.length);
+        ChannelTransferActivity.getObj().enableCommitPending();
+    }
     private void doWrite(long baseAddr, byte[] buf) throws IOException {
         if (buf == null) return;
         int off = 0;
@@ -624,12 +656,7 @@ public class CommsThread extends Thread {
         }
     }
 
-    public void commitAndKeepAlive() throws IOException, InterruptedException {
-        // queue commit write task but do not poison
-        CompletableFuture<Object> fut = new CompletableFuture<>();
-        tasks.put(new Task(Kind.COMMIT_WRITE, 0L, null, 0, 0, fut));
-        awaitFuture(fut);
-    }
+
 
     private void dispatchEnterPcMode(boolean ok, String msg){
         try { ChannelTransferActivity.getObj().onEnterPcMode(ok, msg); } catch (Throwable ignored) {}
@@ -645,7 +672,7 @@ public class CommsThread extends Thread {
         z.channelNumbers = ZoneChannelsIo.getChannels(zoneIndex);
         int soFar = zoneSoFar.incrementAndGet();
         try {
-            com.app.annytunes.ui.ZoneActivity act = com.app.annytunes.ui.ZoneActivity.getObj();
+            ZoneActivity act = ZoneActivity.getObj();
             java.util.List<Zone> one = java.util.Collections.singletonList(z);
             try {
                 act.onZonesDecoded(one, soFar, zoneTotalExpected);
@@ -681,7 +708,7 @@ public class CommsThread extends Thread {
     // =====================================================================================
     // Types
     // =====================================================================================
-    private enum Kind {READ_DECODE, WRITE, POISON, ENTER_PC_MODE, HANDSHAKE, EXIT_PC_MODE, COMMIT_WRITE, ERASE_BLOCK, ZONE_READ, ZONE_CHANNELS_READ}
+    private enum Kind {READ_DECODE, WRITE, POISON, ENTER_PC_MODE, HANDSHAKE, EXIT_PC_MODE, COMMIT_WRITE, ERASE_BLOCK, ZONE_READ, ZONE_CHANNELS_READ, ZONE_WRITE}
 
 
 }

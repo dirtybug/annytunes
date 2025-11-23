@@ -46,6 +46,8 @@ public class ChannelTransferActivity extends AppCompatActivity {
     private TextView txtProgressPercent;
     private Button btnSaveAll;
     private Button btnSaveChanges;
+    private static volatile boolean channelsLoaded; // set true after full channel read completes
+    private Button btnCommitExit;
 
     private String selector;
     private AnytoneUart uart;
@@ -56,6 +58,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
     private File currentCsvFile; // last chosen CSV destination
     private ArrayList<Channel> originalChannels; // snapshot for change comparison
     private Uri chosenCsvUri; // user-selected CSV document
+    private Button btnExitNoCommit;
 
     private final ActivityResultLauncher<String> createDocLauncher = registerForActivityResult(
             new ActivityResultContracts.CreateDocument("text/csv"), this::onCreateCsvDestination);
@@ -68,38 +71,28 @@ public class ChannelTransferActivity extends AppCompatActivity {
         return instance;
     }
 
-    @Override
-    protected void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_transfer);
-        instance = this;
-        selector = getIntent().getStringExtra(EXTRA_SELECTOR);
-        statusText = findViewById(R.id.txtStatus);
-        btnDownload = findViewById(R.id.btnDownload);
-        btnUpload = findViewById(R.id.btnUpload);
-        btnRefresh = findViewById(R.id.btnRefreshChannels);
-        btnEnterPcMode = findViewById(R.id.btnEnterPcMode);
-        listChannels = findViewById(R.id.listChannels);
-        progressRead = findViewById(R.id.progressRead);
-        txtProgressPercent = findViewById(R.id.txtProgressPercent);
-        btnSaveAll = findViewById(R.id.btnSaveAll);
-        btnSaveChanges = findViewById(R.id.btnSaveChanges);
+    public static boolean areChannelsLoaded() {
+        return channelsLoaded;
+    }
 
-        btnDownload.setOnClickListener(v -> startDownloadFlow());
-        btnUpload.setOnClickListener(v -> startUploadFlow());
-        btnRefresh.setOnClickListener(v -> testHandshake());
-        btnSaveAll.setOnClickListener(v -> saveAllCsv());
-        btnSaveChanges.setOnClickListener(v -> writeEditedChannels());
-        btnEnterPcMode.setOnClickListener(v -> enterPcModeAction());
+    public static int getLoadedChannelCount() {
+        try {
+            ChannelTransferActivity inst = getObj();
+            return inst.channels == null ? 0 : inst.channels.size();
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
 
-        connectSerial();
-
-        channels = new ArrayList<>();
-        originalChannels = new ArrayList<>();
-        listChannels.setOnItemClickListener((parent, view, position, id) -> {
-            if (position >= 0 && position < channels.size()) ChannelEditDialog.show(this, channels.get(position), position);
-        });
-        applyInitialButtonState();
+    public static String getChannelName(int channelNumber) {
+        try {
+            ChannelTransferActivity inst = getObj();
+            if (channelNumber < 1 || channelNumber > inst.channels.size()) return "";
+            Channel c = inst.channels.get(channelNumber - 1);
+            return (c.name == null ? "" : c.name);
+        } catch (Throwable e) {
+            return "";
+        }
     }
 
     private File getLastCsvFile() {
@@ -177,26 +170,43 @@ public class ChannelTransferActivity extends AppCompatActivity {
         txtProgressPercent.setVisibility(View.GONE);
         Toast.makeText(this, "Read complete: " + channels.size() + " channels", Toast.LENGTH_SHORT).show();
     }
-    // Method pointer target for CommsThread observer
-    public void onChannelsDecoded(List<Channel> chunk, int soFar, int totalExpected) {
-        runOnUiThread(() -> {
-            for (Channel c : chunk) {
-                channels.add(c);
-                String mode = c.digital ? "Digital" : "Analog";
-                int number = rows.size() + 1;
-                String name = (c.name == null || c.name.isEmpty()) ? "<empty>" : c.name;
-                rows.add(String.format(Locale.getDefault(), "#%d  %s  (%s)", number, name, mode));
-            }
-            adapter.notifyDataSetChanged();
-            int pct = (totalExpected > 0) ? (soFar * 100 / totalExpected) : 0;
-            progressRead.setProgress(pct);
-            txtProgressPercent.setText(pct + "%");
-            if (totalExpected > 0 && soFar >= totalExpected) {
-                originalChannels.clear();
-                originalChannels.addAll(channels); // snapshot after initial load
-                onEnd();
-            }
+
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_transfer);
+        instance = this;
+        selector = getIntent().getStringExtra(EXTRA_SELECTOR);
+        statusText = findViewById(R.id.txtStatus);
+        btnDownload = findViewById(R.id.btnDownload);
+        btnUpload = findViewById(R.id.btnUpload);
+        btnRefresh = findViewById(R.id.btnRefreshChannels);
+        btnEnterPcMode = findViewById(R.id.btnEnterPcMode);
+        listChannels = findViewById(R.id.listChannels);
+        progressRead = findViewById(R.id.progressRead);
+        txtProgressPercent = findViewById(R.id.txtProgressPercent);
+        btnSaveAll = findViewById(R.id.btnSaveAll);
+        btnSaveChanges = findViewById(R.id.btnSaveChanges);
+        btnCommitExit = findViewById(R.id.btnCommitExit);
+        btnExitNoCommit = findViewById(R.id.btnExitNoCommit);
+
+        btnDownload.setOnClickListener(v -> startDownloadFlow());
+        btnUpload.setOnClickListener(v -> startUploadFlow());
+        btnRefresh.setOnClickListener(v -> testHandshake());
+        btnSaveAll.setOnClickListener(v -> saveAllCsv());
+        btnSaveChanges.setOnClickListener(v -> writeEditedChannels());
+        btnEnterPcMode.setOnClickListener(v -> enterPcModeAction());
+        btnCommitExit.setOnClickListener(v -> doCommitAndExit());
+        btnExitNoCommit.setOnClickListener(v -> exitWithoutCommit());
+
+        connectSerial();
+
+        channels = new ArrayList<>();
+        originalChannels = new ArrayList<>();
+        listChannels.setOnItemClickListener((parent, view, position, id) -> {
+            if (position >= 0 && position < channels.size()) ChannelEditDialog.show(this, channels.get(position), position);
         });
+        applyInitialButtonState();
     }
 
     private void startUploadFlow() {
@@ -218,7 +228,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
                 ChannelIo.getObj().writeAllChannels(chans); // this now commits internally
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Uploaded " + chans.size() + " channels", Toast.LENGTH_LONG).show();
-                    applyAfterWriteState();
+                    enableCommitPending();
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> { Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show(); btnUpload.setEnabled(true); });
@@ -240,24 +250,23 @@ public class ChannelTransferActivity extends AppCompatActivity {
         ArrayList<Integer> editedIndices = new ArrayList<>();
         for (int i=0;i<channels.size();i++) if (channels.get(i).edited) editedIndices.add(i);
         if (editedIndices.isEmpty()) { Toast.makeText(this,"No edited channels",Toast.LENGTH_SHORT).show(); return; }
-        btnSaveChanges.setEnabled(false); // prevent double tap
+        btnSaveChanges.setEnabled(false);
         new Thread(() -> {
             try {
                 ChannelIo cio = ChannelIo.getObj();
-                CommsThread comms = CommsThread.getObj();
+                com.app.annytunes.uart.CommsThread comms = com.app.annytunes.uart.CommsThread.getObj();
                 for (int idx : editedIndices) {
                     Channel c = channels.get(idx);
-                    int channelNumber = idx + 1;
-                    long addr = cio.channelIndexToAddress(channelNumber);
+                    long addr = cio.channelIndexToAddress(idx + 1);
                     if (addr < 0) continue;
                     byte[] rec = cio.encodeChannel(c, ChannelIo.CH_OFFSET);
                     try { comms.submitWrite(addr, rec); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new IOException("Interrupted submitting write", ie); }
                 }
-                // Commit without poisoning thread
-                try { comms.commitAndKeepAlive(); } catch (Exception ce) { throw new IOException("Commit failed", ce); }
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "Wrote " + editedIndices.size() + " edited channel(s) to radio", Toast.LENGTH_LONG).show();
-                    applyAfterWriteState();
+                    Toast.makeText(this, "Queued " + editedIndices.size() + " edited channel(s); commit pending", Toast.LENGTH_LONG).show();
+                    btnSaveChanges.setEnabled(true);
+                    btnCommitExit.setEnabled(true);
+                    enableCommitPending();
                 });
             } catch(Exception e){ runOnUiThread(() -> { Toast.makeText(this,"Write edited failed: "+e.getMessage(),Toast.LENGTH_LONG).show(); btnSaveChanges.setEnabled(true); }); }
         }).start();
@@ -308,15 +317,18 @@ public class ChannelTransferActivity extends AppCompatActivity {
         btnRefresh.setEnabled(true);
         btnSaveAll.setEnabled(true);
         btnSaveChanges.setEnabled(true);
+        btnCommitExit.setEnabled(false); // enable only after writes queued
     }
-    private void applyAfterWriteState() {
+
+    public void applyAfterWriteState() {
         // Only allow re-enter PC mode; all other actions disabled
         btnEnterPcMode.setEnabled(true);
         btnDownload.setEnabled(false);
         btnUpload.setEnabled(false);
         btnRefresh.setEnabled(false);
         btnSaveAll.setEnabled(false);
-        btnSaveChanges.setEnabled(false);
+        btnSaveChanges.setEnabled(true);
+        btnCommitExit.setEnabled(true); // enable only after writes queued
     }
     private void applyPcModeActiveState() {
         // PC mode engaged; disable enter button, enable others
@@ -354,5 +366,63 @@ public class ChannelTransferActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+
+    // Method pointer target for CommsThread observer
+    public void onChannelsDecoded(List<Channel> chunk, int soFar, int totalExpected) {
+        runOnUiThread(() -> {
+            for (Channel c : chunk) {
+                channels.add(c);
+                String mode = c.digital ? "Digital" : "Analog";
+                int number = rows.size() + 1;
+                String name = (c.name == null || c.name.isEmpty()) ? "<empty>" : c.name;
+                rows.add(String.format(Locale.getDefault(), "#%d  %s  (%s)", number, name, mode));
+            }
+            adapter.notifyDataSetChanged();
+            int pct = (totalExpected > 0) ? (soFar * 100 / totalExpected) : 0;
+            progressRead.setProgress(pct);
+            txtProgressPercent.setText(pct + "%");
+            if (totalExpected > 0 && soFar >= totalExpected) {
+                originalChannels.clear();
+                originalChannels.addAll(channels); // snapshot after initial load
+                channelsLoaded = true;
+                // notify ZoneActivity if open
+                try {
+                    ZoneActivity.getObj().onChannelsReady();
+                } catch (Throwable ignored) {
+                }
+                onEnd();
+            }
+        });
+    }
+
+    private void doCommitAndExit() {
+        // Manual commit of queued channel/zone writes, then exit
+        if (btnCommitExit != null) btnCommitExit.setEnabled(false);
+        new Thread(() -> {
+            try {
+                CommsThread.getObj().commitWriteSync();
+
+                runOnUiThread(this::navigateHome);
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Commit failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    if (btnCommitExit != null) btnCommitExit.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+
+    private void exitWithoutCommit() {
+        navigateHome();
+    }
+
+    public void enableCommitPending() {
+        runOnUiThread(() -> {
+            if (btnCommitExit != null) btnCommitExit.setEnabled(true);
+        });
+
+
     }
 }

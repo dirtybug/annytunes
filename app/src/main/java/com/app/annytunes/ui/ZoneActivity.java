@@ -9,6 +9,9 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.TableLayout;
+import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -38,6 +41,7 @@ public class ZoneActivity extends AppCompatActivity {
     private ArrayList<Zone> zones;
     private Uri csvUri;
     private int expectedZones;
+    private final java.util.HashMap<Integer, com.app.annytunes.uart.zones.Zone> originalZones = new java.util.HashMap<>(); // index->snapshot
 
     public static ZoneActivity getObj() {
         if (instance == null) throw new IllegalStateException("ZoneActivity not initialized");
@@ -62,8 +66,20 @@ public class ZoneActivity extends AppCompatActivity {
             @Override
             public android.view.View getView(int position, android.view.View convertView, android.view.ViewGroup parent) {
                 android.view.View v = super.getView(position, convertView, parent);
-                if (position < zones.size() && zones.get(position).name != null && !zones.get(position).name.isEmpty()) {
-                    v.setBackgroundColor(Color.TRANSPARENT);
+                if (position >= 0 && position < zones.size()) {
+                    Zone z = zones.get(position);
+                    int chCount = (z.channelNumbers == null) ? 0 : z.channelNumbers.length;
+                    String nameStr = (z.name == null || z.name.isEmpty()) ? ("Zone " + (position + 1)) : z.name;
+                    String countStr = "(" + chCount + " ch)";
+                    String label = "#" + (position + 1) + " " + nameStr + " " + countStr;
+                    android.text.SpannableString ss = new android.text.SpannableString(label);
+
+                    if (z.changedChannels) {
+                        int cs = label.lastIndexOf(countStr);
+                        if (cs >= 0)
+                            ss.setSpan(new android.text.style.BackgroundColorSpan(Color.YELLOW), cs, cs + countStr.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    }
+                    if (v instanceof TextView) ((TextView) v).setText(ss);
                 }
                 return v;
             }
@@ -76,6 +92,8 @@ public class ZoneActivity extends AppCompatActivity {
         btnWriteZones.setOnClickListener(v -> writeZones());
         btnSaveZonesCsv.setOnClickListener(v -> saveAllZonesCsv());
         expectedZones = com.app.annytunes.uart.zones.ZoneIo.getTotalZones();
+        btnReadZones.setEnabled(ChannelTransferActivity.areChannelsLoaded());
+        btnWriteZones.setEnabled(ChannelTransferActivity.areChannelsLoaded());
     }
 
     @Override
@@ -110,6 +128,26 @@ public class ZoneActivity extends AppCompatActivity {
         }
     }
 
+    public void progress(int soFar, int totalExpected) {
+        runOnUiThread(() -> {
+            if (progZones.getVisibility() != android.view.View.VISIBLE) {
+                progZones.setVisibility(android.view.View.VISIBLE);
+                txtZonePercent.setVisibility(android.view.View.VISIBLE);
+            }
+
+            adapter.notifyDataSetChanged();
+            txtStatus.setText("Zones: " + zones.size());
+            if (totalExpected > 0) {
+                int pct = (int) Math.min(100.0, (soFar * 100.0) / totalExpected);
+                progZones.setProgress(pct);
+                txtZonePercent.setText(pct + "%");
+                if (soFar >= totalExpected) {
+                    progZones.setVisibility(android.view.View.GONE);
+                    txtZonePercent.setVisibility(android.view.View.GONE);
+                }
+            }
+        });
+    }
     public void onZonesDecoded(List<Zone> decoded, int soFar, int totalExpected) {
         runOnUiThread(() -> {
             if (progZones.getVisibility() != android.view.View.VISIBLE) {
@@ -119,6 +157,9 @@ public class ZoneActivity extends AppCompatActivity {
             for (Zone z : decoded) {
                 zones.add(z);
                 int index = zones.size();
+                // snapshot original for change detection
+                Zone snap = new Zone(z.name, z.channelNumbers);
+                originalZones.put(index - 1, snap);
                 String displayName = (z.name == null || z.name.isEmpty()) ? ("Zone " + index) : z.name;
                 int chCount = (z.channelNumbers == null) ? 0 : z.channelNumbers.length;
                 rows.add(String.format(java.util.Locale.getDefault(), "#%d %s (%d ch)", index, displayName, chCount));
@@ -151,7 +192,8 @@ public class ZoneActivity extends AppCompatActivity {
 
     private void showEditDialog(Zone z, int position) {
         android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
-        b.setTitle("Edit Zone #" + (position + 1));
+        b.setTitle("Zone #" + (position + 1));
+        ScrollView scroll = new ScrollView(this);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (8 * getResources().getDisplayMetrics().density);
@@ -159,37 +201,119 @@ public class ZoneActivity extends AppCompatActivity {
         EditText name = new EditText(this);
         name.setHint("Zone Name");
         name.setText(z.name);
-        EditText chans = new EditText(this);
-        chans.setHint("Channels (space separated)");
-        StringBuilder sb = new StringBuilder();
-        if (z.channelNumbers != null) {
-            for (int i = 0; i < z.channelNumbers.length; i++) {
-                if (i > 0) sb.append(' ');
-                sb.append(z.channelNumbers[i]);
-            }
-        }
-        chans.setText(sb.toString());
         layout.addView(name);
-        layout.addView(chans);
-        b.setView(layout);
-        b.setPositiveButton("Save", (d, w) -> {
-            z.name = name.getText().toString().trim();
-            String[] toks = chans.getText().toString().trim().split("[ ,;]+");
-            ArrayList<Integer> list = new ArrayList<>();
-            for (String t : toks) {
-                if (t.isEmpty()) continue;
-                try {
-                    int v = Integer.parseInt(t);
-                    if (v >= 1 && v <= ZoneIo.getTotalZones()) list.add(v);
-                } catch (Exception ignored) {
-                }
+        // Table of current channels
+        TableLayout table = new TableLayout(this);
+        table.setStretchAllColumns(true);
+        TableRow header = new TableRow(this);
+        addCell(header, "#");
+        addCell(header, "Channel");
+        addCell(header, "Name");
+        addCell(header, "Remove");
+        table.addView(header);
+        int[] nums = z.channelNumbers == null ? new int[0] : z.channelNumbers;
+        java.util.LinkedHashSet<Integer> current = new java.util.LinkedHashSet<>();
+        for (int v : nums) current.add(v);
+        for (int i = 0; i < nums.length; i++) {
+            int chNum = nums[i];
+            TableRow tr = new TableRow(this);
+            addCell(tr, Integer.toString(i + 1));
+            addCell(tr, Integer.toString(chNum));
+            addCell(tr, ChannelTransferActivity.getChannelName(chNum));
+            Button rm = new Button(this);
+            rm.setText("X");
+            rm.setOnClickListener(v -> {
+                current.remove(chNum);
+                rebuildTable(table, current);
+            });
+            tr.addView(rm);
+            table.addView(tr);
+        }
+        layout.addView(table);
+        // Add channel section
+        Button btnAdd = new Button(this);
+        btnAdd.setText("Add Channel");
+        layout.addView(btnAdd);
+        TextView txtAddInfo = new TextView(this);
+        layout.addView(txtAddInfo);
+        btnAdd.setOnClickListener(v -> {
+            int max = ChannelTransferActivity.getLoadedChannelCount();
+            // Build list of available channels not in current
+            java.util.ArrayList<Integer> available = new java.util.ArrayList<>();
+            for (int i = 1; i <= max; i++) {
+                if (!current.contains(i) && current.size() < 250) available.add(i);
             }
-            z.channelNumbers = list.stream().mapToInt(Integer::intValue).toArray();
-            rows.set(position, String.format(java.util.Locale.getDefault(), "#%d %s (%d ch)", position + 1, (z.name == null || z.name.isEmpty() ? "Zone " + (position + 1) : z.name), z.channelNumbers == null ? 0 : z.channelNumbers.length));
+            if (available.isEmpty()) {
+                Toast.makeText(this, "No channels left (max 250 or all used)", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String[] labels = new String[available.size()];
+            for (int i = 0; i < available.size(); i++) {
+                int ch = available.get(i);
+                labels[i] = ch + " - " + ChannelTransferActivity.getChannelName(ch);
+            }
+            android.app.AlertDialog.Builder sel = new android.app.AlertDialog.Builder(this);
+            sel.setTitle("Select Channel to Add");
+            sel.setItems(labels, (dialog, which) -> {
+                int ch = available.get(which);
+                current.add(ch);
+                rebuildTable(table, current);
+            });
+            sel.setNegativeButton("Cancel", null);
+            sel.show();
+        });
+        scroll.addView(layout);
+        b.setView(scroll);
+        b.setPositiveButton("Save", (d, w) -> {
+            String oldName = z.name == null ? "" : z.name;
+            int[] oldNums = z.channelNumbers == null ? new int[0] : z.channelNumbers.clone();
+            String newName = name.getText().toString().trim();
+            if (newName.length() > 31)
+                newName = newName.substring(0, 31); // clamp to 31 (leave null terminator)
+            z.name = newName;
+            z.channelNumbers = current.stream().mapToInt(Integer::intValue).toArray();
+            // flags: name or membership changed
+            Zone.changedName = !oldName.equals(z.name);
+            z.changedChannels = !java.util.Arrays.equals(oldNums, z.channelNumbers);
+            // Update row text
+            String label = String.format(java.util.Locale.getDefault(), "#%d %s (%d ch)", position + 1, (z.name == null || z.name.isEmpty() ? "Zone " + (position + 1) : z.name), z.channelNumbers.length);
+            rows.set(position, label);
             adapter.notifyDataSetChanged();
         });
         b.setNegativeButton("Cancel", null);
         b.show();
+    }
+
+    private void rebuildTable(TableLayout table, java.util.LinkedHashSet<Integer> current) {
+        table.removeAllViews();
+        TableRow header = new TableRow(this);
+        addCell(header, "#");
+        addCell(header, "Channel");
+        addCell(header, "Name");
+        addCell(header, "Remove");
+        table.addView(header);
+        int idx = 0;
+        for (int ch : current) {
+            TableRow tr = new TableRow(this);
+            addCell(tr, Integer.toString(++idx));
+            addCell(tr, Integer.toString(ch));
+            addCell(tr, ChannelTransferActivity.getChannelName(ch));
+            Button rm = new Button(this);
+            rm.setText("X");
+            rm.setOnClickListener(v -> {
+                current.remove(ch);
+                rebuildTable(table, current);
+            });
+            tr.addView(rm);
+            table.addView(tr);
+        }
+    }
+
+    private void addCell(TableRow tr, String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setPadding(8, 4, 8, 4);
+        tr.addView(tv);
     }
 
     private void writeZones() {
@@ -199,24 +323,9 @@ public class ZoneActivity extends AppCompatActivity {
         }
         new Thread(() -> {
             try {
-                com.app.annytunes.uart.CommsThread comms = com.app.annytunes.uart.CommsThread.getObj();
-                for (int i = 0; i < zones.size(); i++) {
-                    com.app.annytunes.uart.zones.Zone z = zones.get(i);
-                    long addr = com.app.annytunes.uart.zones.ZoneIo.addressOfZone(i + 1);
-                    byte[] rec = com.app.annytunes.uart.zones.ZoneIo.encodeZone(z, com.app.annytunes.uart.zones.ZoneIo.DEFAULT_ZONE_RECORD_SIZE);
-                    try {
-                        comms.submitWrite(addr, rec);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("Interrupted zone write", ie);
-                    }
-                }
-                try {
-                    comms.commitAndKeepAlive();
-                } catch (Exception ce) {
-                    throw new RuntimeException("Commit failed", ce);
-                }
-                runOnUiThread(() -> Toast.makeText(this, "Zones written", Toast.LENGTH_LONG).show());
+
+                ZoneIo.writeAllZones(zones);
+                runOnUiThread(() -> Toast.makeText(this, "Zones written successfully.", Toast.LENGTH_LONG).show());
             } catch (Throwable e) {
                 runOnUiThread(() -> Toast.makeText(this, "Zone write failed: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
@@ -249,5 +358,12 @@ public class ZoneActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, "CSV save failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    public void onChannelsReady() {
+        runOnUiThread(() -> {
+            if (btnReadZones != null) btnReadZones.setEnabled(true);
+            if (btnWriteZones != null) btnWriteZones.setEnabled(true);
+        });
     }
 }

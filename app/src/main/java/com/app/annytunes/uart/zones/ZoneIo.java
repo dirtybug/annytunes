@@ -1,6 +1,6 @@
 package com.app.annytunes.uart.zones;
 
-import com.app.annytunes.uart.channels.ChannelIo;
+import com.app.annytunes.uart.CommsThread;
 
 /**
  * Zone read/write helpers. Record layout ASSUMED (needs confirmation with AMMD dump):
@@ -12,7 +12,7 @@ import com.app.annytunes.uart.channels.ChannelIo;
  */
 public class ZoneIo {
     // Change default record size to 128 (must be <=255 to fit single frame on write)
-    public static final int DEFAULT_ZONE_RECORD_SIZE = 32; // reverted from 128 per user request
+    public static final int DEFAULT_ZONE_RECORD_SIZE = 32; // 32-byte zone name record
     public static final long DEFAULT_ZONE_BASE = 0x02540000L; // zone name records base restored
     // Added total zones constant and accessor (required by ZoneActivity)
     private static final int TOTAL_ZONES = 250; // provisional upper bound
@@ -31,23 +31,19 @@ public class ZoneIo {
 
     public static Zone decodeZone(byte[] raw) {
         Zone z = new Zone();
-        if (raw == null || raw.length < 32) return z;
-        boolean allFF = true;
-        boolean allZero = true;
-        for (int i = 0; i < 16 && i < raw.length; i++) {
+        if (raw == null || raw.length < DEFAULT_ZONE_RECORD_SIZE) return z;
+        boolean allFF = true, allZero = true;
+        for (int i = 0; i < DEFAULT_ZONE_RECORD_SIZE; i++) {
             int b = raw[i] & 0xFF;
             if (b != 0xFF) allFF = false;
             if (b != 0x00) allZero = false;
         }
-        if (allFF || allZero) {
-            z.name = "";
-            z.channelNumbers = new int[0];
-            return z;
-        }
+
         int nameLen = 0;
-        while (nameLen < 16 && nameLen < raw.length && raw[nameLen] != 0) nameLen++;
+        while (nameLen < (DEFAULT_ZONE_RECORD_SIZE - 1) && raw[nameLen] != 0) nameLen++;
+
         z.name = new String(raw, 0, nameLen, java.nio.charset.StandardCharsets.ISO_8859_1).trim();
-        // Do NOT parse channels here; membership comes from ZoneChannelsIo (separate area)
+        // channelNumbers populated separately
         z.channelNumbers = new int[0];
         return z;
     }
@@ -55,36 +51,53 @@ public class ZoneIo {
     public static byte[] encodeZone(Zone z, int recSize) {
         if (recSize <= 0) recSize = DEFAULT_ZONE_RECORD_SIZE;
         byte[] raw = new byte[recSize];
-        // name
         byte[] nameBytes = (z == null || z.name == null) ? new byte[0] : z.name.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
-        int nlen = Math.min(15, nameBytes.length); // reserve 1 for null
+        int nlen = Math.min(recSize - 1, nameBytes.length); // leave room for null terminator
         if (nlen > 0) System.arraycopy(nameBytes, 0, raw, 0, nlen);
-        if (nlen < 16) raw[nlen] = 0; // terminator
-        // channels
-        int[] chans = (z == null || z.channelNumbers == null) ? new int[0] : z.channelNumbers;
-        int maxEntries = (recSize - 0x10) / 2;
-        int count = Math.min(chans.length, maxEntries - 1); // leave space for terminator
-        int pos = 0x10;
-        for (int i = 0; i < count; i++) {
-            int v = chans[i];
-            if (v < 0 || v > 0xFFFF) v = 0; // clamp
-            raw[pos] = (byte) (v & 0xFF);
-            raw[pos + 1] = (byte) ((v >> 8) & 0xFF);
-            pos += 2;
-        }
-        // terminator 0x0000
-        if (pos + 1 < raw.length) {
-            raw[pos] = 0x00;
-            raw[pos + 1] = 0x00;
-        }
+        raw[nlen] = 0; // terminator
         return raw;
     }
 
-    private static int safeTotalChannels() {
-        try {
-            return ChannelIo.getObj().getTotalChannels();
-        } catch (Throwable ignored) {
-            return Integer.MAX_VALUE;
+    public static void writeAllZones(java.util.List<Zone> zones) {
+        CommsThread.getObj();
+        if (zones == null || zones.isEmpty()) {
+            throw new IllegalArgumentException("No zones to write");
         }
+
+        // Calculate the total size required for all zones
+        int totalSize = zones.stream()
+                .mapToInt(zone -> DEFAULT_ZONE_RECORD_SIZE)
+                .sum();
+        int paddedSize = (totalSize + 0xFF) & ~0xFF; // Align to 0xFF boundary
+
+        byte[] block = new byte[paddedSize];
+        int offset = 0;
+        if (!Zone.changedName) {
+            return;
+        }
+
+        for (Zone zone : zones) {
+
+            byte[] zoneBytes = encodeZone(zone, DEFAULT_ZONE_RECORD_SIZE);
+            System.arraycopy(zoneBytes, 0, block, offset, zoneBytes.length);
+            offset += zoneBytes.length;
+
+        }
+
+        // Fill the remaining space with padding (e.g., 0xFF)
+        for (int i = offset; i < block.length; i++) {
+            block[i] = (byte) 0xFF;
+        }
+
+        // Write the encoded zones in chunks of maximum size
+
+        long address = DEFAULT_ZONE_BASE;
+        try {
+            CommsThread.getObj().submitWriteZoneActivity(address, block);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }
+

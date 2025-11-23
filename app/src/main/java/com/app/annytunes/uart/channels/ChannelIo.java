@@ -93,30 +93,25 @@ public class ChannelIo {
             int bankCount = getBankCount();
             int globalIndex = 0;
             CommsThread comms = CommsThread.getObj();
-            try {
-                for (int bank = 0; bank < bankCount; bank++) {
-                    Bank bk = getBank(bank);
-                    long bankBase = bk.address;
-                    int perBank = bk.channels;
-                    for (int i = 0; i < perBank; i += perChunk) {
-                        int recsThis = Math.min(perChunk, perBank - i);
-                        int bytesThis = recsThis * CH_OFFSET;
-                        byte[] chunk = new byte[bytesThis];
-                        for (int r = 0; r < recsThis; r++) {
-                            Channel c = (globalIndex < chans.size()) ? chans.get(globalIndex) : new Channel();
-                            byte[] rec = encodeChannel(c, CH_OFFSET);
-                            System.arraycopy(rec, 0, chunk, r * CH_OFFSET, CH_OFFSET);
-                            globalIndex++;
-                        }
-                        long addr = bankBase + (long) i * CH_OFFSET;
-                        if (DEBUG) Log.d(TAG, String.format("TX chunk submit bank=%d addr=0x%08X recs=%d bytes=%d", bank, (int) addr, recsThis, bytesThis));
-                        try { comms.submitWrite(addr, chunk); }
-                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted while submitting write chunk", e); }
+            for (int bank = 0; bank < bankCount; bank++) {
+                Bank bk = getBank(bank);
+                long bankBase = bk.address;
+                int perBank = bk.channels;
+                for (int i = 0; i < perBank; i += perChunk) {
+                    int recsThis = Math.min(perChunk, perBank - i);
+                    int bytesThis = recsThis * CH_OFFSET;
+                    byte[] chunk = new byte[bytesThis];
+                    for (int r = 0; r < recsThis; r++) {
+                        Channel c = (globalIndex < chans.size()) ? chans.get(globalIndex) : new Channel();
+                        byte[] rec = encodeChannel(c, CH_OFFSET);
+                        System.arraycopy(rec, 0, chunk, r * CH_OFFSET, CH_OFFSET);
+                        globalIndex++;
                     }
+                    long addr = bankBase + (long) i * CH_OFFSET;
+                    if (DEBUG) Log.d(TAG, String.format("TX chunk submit bank=%d addr=0x%08X recs=%d bytes=%d", bank, (int) addr, recsThis, bytesThis));
+                    try { comms.submitWrite(addr, chunk); }
+                    catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted while submitting write chunk", e); }
                 }
-            } finally {
-                try { comms.commitWriteSync(0); }
-                catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IOException("Interrupted finishing writes", e); }
             }
         }
     }
