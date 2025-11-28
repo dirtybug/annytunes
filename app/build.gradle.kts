@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "com.app.anytunes"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.app.annytunes"
-        minSdk = 29
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        minSdk = 31
+        targetSdk = 36
+        versionCode = 3
+        versionName = "1.3"
 
 
     }

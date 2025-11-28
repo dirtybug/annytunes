@@ -99,5 +99,20 @@ public class ZoneIo {
         }
 
     }
-}
 
+    /**
+     * Checks if a zone name is empty (all bytes are 0xFF).
+     *
+     * @param zoneName The byte array representing the zone name.
+     * @return True if the zone name is empty, false otherwise.
+     */
+    public static boolean isZoneEmpty(byte[] zoneName) {
+        if (zoneName == null) return true;
+        for (byte b : zoneName) {
+            if (b != (byte) 0xFF) {
+                return false;
+            }
+        }
+        return true;
+    }
+}

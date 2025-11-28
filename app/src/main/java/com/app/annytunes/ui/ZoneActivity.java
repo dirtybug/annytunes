@@ -69,7 +69,8 @@ public class ZoneActivity extends AppCompatActivity {
                 if (position >= 0 && position < zones.size()) {
                     Zone z = zones.get(position);
                     int chCount = (z.channelNumbers == null) ? 0 : z.channelNumbers.length;
-                    String nameStr = (z.name == null || z.name.isEmpty()) ? ("Zone " + (position + 1)) : z.name;
+                    String nameStr = (z.name == null || z.name.isEmpty() || ZoneIo.isZoneEmpty(z.name.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)))
+                            ? ("Zone " + (position + 1)) : z.name;
                     String countStr = "(" + chCount + " ch)";
                     String label = "#" + (position + 1) + " " + nameStr + " " + countStr;
                     android.text.SpannableString ss = new android.text.SpannableString(label);
