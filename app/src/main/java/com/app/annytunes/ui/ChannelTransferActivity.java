@@ -35,7 +35,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
     private static final String DEFAULT_CSV_NAME = "channels.csv";
 
     private static ChannelTransferActivity instance;
-
+    private static volatile boolean channelsLoaded; // set true after full channel read completes
     private TextView statusText;
     private Button btnDownload;
     private Button btnUpload;
@@ -46,28 +46,24 @@ public class ChannelTransferActivity extends AppCompatActivity {
     private TextView txtProgressPercent;
     private Button btnSaveAll;
     private Button btnSaveChanges;
-    private static volatile boolean channelsLoaded; // set true after full channel read completes
     private Button btnCommitExit;
 
     private String selector;
     private AnytoneUart uart;
-
+    private final ActivityResultLauncher<String[]> openDocLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(), this::onCsvPicked);
     private ArrayList<String> rows;
     private android.widget.ArrayAdapter<String> adapter;
     private ArrayList<Channel> channels; // track real channel objects for editing
     private File currentCsvFile; // last chosen CSV destination
     private ArrayList<Channel> originalChannels; // snapshot for change comparison
     private Uri chosenCsvUri; // user-selected CSV document
+
     private Button btnExitNoCommit;
 
-    private final ActivityResultLauncher<String> createDocLauncher = registerForActivityResult(
-            new ActivityResultContracts.CreateDocument("text/csv"), this::onCreateCsvDestination);
-
-    private final ActivityResultLauncher<String[]> openDocLauncher = registerForActivityResult(
-            new ActivityResultContracts.OpenDocument(), this::onCsvPicked);
-
     public static ChannelTransferActivity getObj() {
-        if (instance == null) throw new IllegalStateException("ChannelTransferActivity not initialized yet");
+        if (instance == null)
+            throw new IllegalStateException("ChannelTransferActivity not initialized yet");
         return instance;
     }
 
@@ -123,15 +119,9 @@ public class ChannelTransferActivity extends AppCompatActivity {
     }
 
     private void startDownloadFlow() {
-        createDocLauncher.launch(DEFAULT_CSV_NAME);
-    }
 
-    private void onCreateCsvDestination(Uri uri) {
-        if (uri == null) return;
-        if (uart == null) {
-            Toast.makeText(this, "Not connected", Toast.LENGTH_SHORT).show();
-            return;
-        }
+
+
         progressRead.setIndeterminate(false);
         progressRead.setProgress(0);
         progressRead.setMax(100);
@@ -140,7 +130,8 @@ public class ChannelTransferActivity extends AppCompatActivity {
         txtProgressPercent.setText("0%");
         rows = new ArrayList<>();
         adapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_list_item_1, rows) {
-            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+            @Override
+            public View getView(int position, View convertView, android.view.ViewGroup parent) {
                 View v = super.getView(position, convertView, parent);
                 if (position < channels.size() && channels.get(position).edited) {
                     v.setBackgroundColor(Color.YELLOW);
@@ -152,7 +143,6 @@ public class ChannelTransferActivity extends AppCompatActivity {
         };
         listChannels.setAdapter(adapter);
         channels.clear();
-        chosenCsvUri = uri;
         currentCsvFile = null; // switch to Uri-based persistence
 
         // Direct call; no background thread needed since this only enqueues tasks
@@ -162,10 +152,9 @@ public class ChannelTransferActivity extends AppCompatActivity {
             Toast.makeText(this, "Download failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
-    private void onError () {
 
-    }
-    private void onEnd () {
+
+    private void onEnd() {
         progressRead.setVisibility(View.GONE);
         txtProgressPercent.setVisibility(View.GONE);
         Toast.makeText(this, "Read complete: " + channels.size() + " channels", Toast.LENGTH_SHORT).show();
@@ -204,25 +193,31 @@ public class ChannelTransferActivity extends AppCompatActivity {
         channels = new ArrayList<>();
         originalChannels = new ArrayList<>();
         listChannels.setOnItemClickListener((parent, view, position, id) -> {
-            if (position >= 0 && position < channels.size()) ChannelEditDialog.show(this, channels.get(position), position);
+            if (position >= 0 && position < channels.size())
+                ChannelEditDialog.show(this, channels.get(position), position);
         });
         applyInitialButtonState();
     }
 
     private void startUploadFlow() {
-        openDocLauncher.launch(new String[]{"text/csv","application/octet-stream"});
+        openDocLauncher.launch(new String[]{"text/csv", "application/octet-stream"});
     }
 
     private void onCsvPicked(Uri uri) {
         if (uri == null) return;
-        if (uart == null) { Toast.makeText(this, "Not connected", Toast.LENGTH_SHORT).show(); return; }
+        if (uart == null) {
+            Toast.makeText(this, "Not connected", Toast.LENGTH_SHORT).show();
+            return;
+        }
         btnUpload.setEnabled(false);
         new Thread(() -> {
             try {
                 File tmp = new File(getCacheDir(), "import.csv");
                 try (var is = getContentResolver().openInputStream(uri); var fos = new java.io.FileOutputStream(tmp)) {
                     if (is == null) throw new IOException("openInputStream returned null");
-                    byte[] buf = new byte[8192]; int r; while ((r = is.read(buf)) > 0) fos.write(buf, 0, r);
+                    byte[] buf = new byte[8192];
+                    int r;
+                    while ((r = is.read(buf)) > 0) fos.write(buf, 0, r);
                 }
                 List<Channel> chans = CsvChannelUtil.read(tmp);
                 ChannelIo.getObj().writeAllChannels(chans); // this now commits internally
@@ -231,25 +226,43 @@ public class ChannelTransferActivity extends AppCompatActivity {
                     enableCommitPending();
                 });
             } catch (Exception e) {
-                runOnUiThread(() -> { Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show(); btnUpload.setEnabled(true); });
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    btnUpload.setEnabled(true);
+                });
             }
         }).start();
     }
 
     private void saveAllCsv() {
-        if (channels == null || channels.isEmpty()) { Toast.makeText(this,"No channels",Toast.LENGTH_SHORT).show(); return; }
-        if (chosenCsvUri == null) { Toast.makeText(this,"No CSV destination",Toast.LENGTH_SHORT).show(); return; }
+        if (channels == null || channels.isEmpty()) {
+            Toast.makeText(this, "No channels", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (chosenCsvUri == null) {
+            Toast.makeText(this, "No CSV destination", Toast.LENGTH_SHORT).show();
+            return;
+        }
         try (var os = getContentResolver().openOutputStream(chosenCsvUri, "w"); var pw = new PrintWriter(new OutputStreamWriter(os, java.nio.charset.StandardCharsets.UTF_8))) {
             pw.println(CsvChannelUtil.header());
-            for (Channel c: channels) pw.println(CsvChannelUtil.row(c));
-            Toast.makeText(this,"Saved all to CSV",Toast.LENGTH_SHORT).show();
-        } catch(Exception e){ Toast.makeText(this,"Save all failed: "+e.getMessage(),Toast.LENGTH_LONG).show(); }
+            for (Channel c : channels) pw.println(CsvChannelUtil.row(c));
+            Toast.makeText(this, "Saved all to CSV", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Save all failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
+
     private void writeEditedChannels() {
-        if (channels == null || channels.isEmpty()) { Toast.makeText(this,"No channels",Toast.LENGTH_SHORT).show(); return; }
+        if (channels == null || channels.isEmpty()) {
+            Toast.makeText(this, "No channels", Toast.LENGTH_SHORT).show();
+            return;
+        }
         ArrayList<Integer> editedIndices = new ArrayList<>();
-        for (int i=0;i<channels.size();i++) if (channels.get(i).edited) editedIndices.add(i);
-        if (editedIndices.isEmpty()) { Toast.makeText(this,"No edited channels",Toast.LENGTH_SHORT).show(); return; }
+        for (int i = 0; i < channels.size(); i++) if (channels.get(i).edited) editedIndices.add(i);
+        if (editedIndices.isEmpty()) {
+            Toast.makeText(this, "No edited channels", Toast.LENGTH_SHORT).show();
+            return;
+        }
         btnSaveChanges.setEnabled(false);
         new Thread(() -> {
             try {
@@ -260,7 +273,12 @@ public class ChannelTransferActivity extends AppCompatActivity {
                     long addr = cio.channelIndexToAddress(idx + 1);
                     if (addr < 0) continue;
                     byte[] rec = cio.encodeChannel(c, ChannelIo.CH_OFFSET);
-                    try { comms.submitWrite(addr, rec); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new IOException("Interrupted submitting write", ie); }
+                    try {
+                        comms.submitWrite(addr, rec);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted submitting write", ie);
+                    }
                 }
                 runOnUiThread(() -> {
                     Toast.makeText(this, "Queued " + editedIndices.size() + " edited channel(s); commit pending", Toast.LENGTH_LONG).show();
@@ -268,9 +286,15 @@ public class ChannelTransferActivity extends AppCompatActivity {
                     btnCommitExit.setEnabled(true);
                     enableCommitPending();
                 });
-            } catch(Exception e){ runOnUiThread(() -> { Toast.makeText(this,"Write edited failed: "+e.getMessage(),Toast.LENGTH_LONG).show(); btnSaveChanges.setEnabled(true); }); }
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Write edited failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    btnSaveChanges.setEnabled(true);
+                });
+            }
         }).start();
     }
+
     private void navigateHome() {
         try {
             android.content.Intent intent = new android.content.Intent(this, MainActivity.class);
@@ -289,6 +313,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
         rows.set(position, String.format(Locale.getDefault(), "#%d  %s  (%s)%s", position + 1, name, mode, c.edited ? " *" : ""));
         if (adapter != null) adapter.notifyDataSetChanged();
     }
+
     public void persistChannelEdit(int position) {
         updateRow(position);
         if (chosenCsvUri == null) return; // no destination yet
@@ -330,6 +355,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
         btnSaveChanges.setEnabled(true);
         btnCommitExit.setEnabled(true); // enable only after writes queued
     }
+
     private void applyPcModeActiveState() {
         // PC mode engaged; disable enter button, enable others
         btnEnterPcMode.setEnabled(false);
@@ -340,7 +366,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
         btnSaveChanges.setEnabled(true);
     }
 
-    public void onEnterPcMode(boolean ok, String message){
+    public void onEnterPcMode(boolean ok, String message) {
         runOnUiThread(() -> {
             if (ok) {
                 Toast.makeText(this, "PC Mode entered", Toast.LENGTH_SHORT).show();
@@ -356,6 +382,7 @@ public class ChannelTransferActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(android.view.Menu menu) {
         menu.add(0, 1, 0, "Zones");
+        menu.add(0, 2, 0, "Compare Channels"); // Added menu item for comparing channels
         return true;
     }
 
@@ -363,6 +390,10 @@ public class ChannelTransferActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(android.view.MenuItem item) {
         if (item.getItemId() == 1) {
             startActivity(new android.content.Intent(this, ZoneActivity.class));
+            return true;
+        } else if (item.getItemId() == 2) {
+            // Trigger the FetchAndCompareChannelsTask
+            new FetchAndCompareChannelsTask(this, channels).execute();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -426,3 +457,4 @@ public class ChannelTransferActivity extends AppCompatActivity {
 
     }
 }
+

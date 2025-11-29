@@ -29,16 +29,8 @@ import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     private static final String ACTION_USB_PERMISSION = "com.app.annytunes.USB_PERMISSION";
-    private Spinner deviceSpinner;
-    private Button refreshBtn;
-    private Button connectBtn;
-    private UsbManager usbManager;
-    private final List<UsbDevice> enumeratedDevices = new ArrayList<>();
-    private PendingIntent usbPermissionIntent;
-    private UsbDevice pendingDeviceForPermission;
-
     private static MainActivity instance;
-
+    private final List<UsbDevice> enumeratedDevices = new ArrayList<>();
     private final ActivityResultLauncher<String> storagePermLauncher = registerForActivityResult(
             new ActivityResultContracts.RequestPermission(), granted -> {
                 if (!granted) {
@@ -46,17 +38,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
     );
-
-    private void registerUsbPermissionReceiver() {
-        IntentFilter usbFilter = new IntentFilter(ACTION_USB_PERMISSION);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbPermissionReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            //noinspection deprecation
-            registerReceiver(usbPermissionReceiver, usbFilter);
-        }
-    }
-
+    private Spinner deviceSpinner;
+    private Button refreshBtn;
+    private Button connectBtn;
+    private UsbManager usbManager;
+    private PendingIntent usbPermissionIntent;
+    private UsbDevice pendingDeviceForPermission;
     private final BroadcastReceiver usbPermissionReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -82,6 +69,16 @@ public class MainActivity extends AppCompatActivity {
     public static MainActivity getObj() {
         if (instance == null) throw new IllegalStateException("MainActivity not ready");
         return instance;
+    }
+
+    private void registerUsbPermissionReceiver() {
+        IntentFilter usbFilter = new IntentFilter(ACTION_USB_PERMISSION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbPermissionReceiver, usbFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            //noinspection deprecation
+            registerReceiver(usbPermissionReceiver, usbFilter);
+        }
     }
 
     @Override
@@ -115,7 +112,8 @@ public class MainActivity extends AppCompatActivity {
         instance = null;
         try {
             unregisterReceiver(usbPermissionReceiver);
-        } catch (IllegalArgumentException ignored) {}
+        } catch (IllegalArgumentException ignored) {
+        }
     }
 
     private void enumerateDevices() {

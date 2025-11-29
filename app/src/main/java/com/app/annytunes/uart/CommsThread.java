@@ -67,7 +67,7 @@ public class CommsThread extends Thread {
     // =====================================================================================
     // Fields
     // =====================================================================================
-    private volatile AnytoneUart at;                      // attached UART
+    private final AnytoneUart at;                      // attached UART
     private final BlockingQueue<Task> tasks = new LinkedBlockingQueue<>();
     private final BlockingQueue<Result> results = new LinkedBlockingQueue<>();
     private final AtomicReference<Throwable> firstError = new AtomicReference<>(null);
@@ -132,10 +132,7 @@ public class CommsThread extends Thread {
         return instance;
     }
 
-    public static synchronized void attachUart(AnytoneUart uart) {
-        CommsThread ct = getObj();
-        ct.at = uart;
-    }
+
 
     // Inbound entry point from UART async callback
     public static void enqueueIncoming(byte[] data) {
@@ -191,11 +188,7 @@ public class CommsThread extends Thread {
             android.util.Log.d(TAG, "[zone-ch] start read index=" + zoneIndex1Based + " addr=0x" + String.format("%08X", (int) addr));
     }
 
-    public List<Channel> takeDecoded() throws IOException, InterruptedException {
-        Result r = results.take();
-        if (r.err != null) throw new IOException("CommsThread decode error", r.err);
-        return r.channels; // may be null
-    }
+
 
     // Synchronous protocol commands (queued)
     public void enterPcMode() throws IOException, InterruptedException {
@@ -407,18 +400,13 @@ public class CommsThread extends Thread {
         }
     }
 
-    private AnytoneUart ensureUart() {
-        if (at == null)
-            throw new IllegalStateException("AnytoneUart not yet attached to CommsThread");
-        return at;
-    }
 
     // =====================================================================================
     // Protocol implementations (moved from UART)
     // =====================================================================================
     private void doEnterPcMode() throws IOException {
-        ensureUart().restartPort();
-        ensureUart().writeBytes("PROGRAM".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        AnytoneUart.getObj().restartPort();
+        AnytoneUart.getObj().writeBytes("PROGRAM".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         try {
             readExact(3, 4000);
             dispatchEnterPcMode(true, "OK");
@@ -429,8 +417,8 @@ public class CommsThread extends Thread {
     }
 
     private void doHandshake() throws IOException {
-        ensureUart().flushInput();
-        ensureUart().writeBytes(new byte[]{0x02});
+        AnytoneUart.getObj().flushInput();
+        AnytoneUart.getObj().writeBytes(new byte[]{0x02});
         byte[] expect = new byte[]{
                 (byte) 0x49, (byte) 0x44, (byte) 0x38, (byte) 0x37,
                 (byte) 0x38, (byte) 0x55, (byte) 0x56, (byte) 0x00,
@@ -444,17 +432,17 @@ public class CommsThread extends Thread {
     }
 
     private void doExitPcMode() throws IOException {
-        ensureUart().writeBytes("END".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        AnytoneUart.getObj().writeBytes("END".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
     private void doCommitWrite() throws IOException {
-        ensureUart().writeBytes(new byte[]{0x45, 0x4E, 0x44}); // "END"
+        AnytoneUart.getObj().writeBytes(new byte[]{0x45, 0x4E, 0x44}); // "END"
         waitForAck(1000);
     }
 
     private boolean doEraseBlock(long addr) throws IOException {
         int chunk = 64;
-        ensureUart().flushInput();
+        AnytoneUart.getObj().flushInput();
         byte[] frame = new byte[AnytoneUart.FRAME_HEADER_LEN];
         frame[0] = 'E';
         frame[1] = (byte) ((addr >> 24) & 0xFF);
@@ -465,7 +453,7 @@ public class CommsThread extends Thread {
         int sum = 0;
         for (int i = 1; i <= 5; i++) sum = (sum + (frame[i] & 0xFF)) & 0xFF;
         frame[6] = (byte) (sum & 0xFF);
-        ensureUart().writeBytes(frame);
+        AnytoneUart.getObj().writeBytes(frame);
         return waitForAck(3000);
     }
 
@@ -543,7 +531,7 @@ public class CommsThread extends Thread {
 
     public byte[] readMem(long addr, int len) throws IOException {
         if (len < 0 || len > 255) throw new IllegalArgumentException("len inválido: " + len);
-        ensureUart().flushInput();
+        AnytoneUart.getObj().flushInput();
         byte[] frame = new byte[AnytoneUart.FRAME_HEADER_LEN];
         frame[0] = 'R';
         frame[1] = (byte) ((addr >> 24) & 0xFF);
@@ -553,7 +541,7 @@ public class CommsThread extends Thread {
         frame[5] = (byte) (len & 0xFF);
         int sum = (frame[1] & 0xFF) + (frame[2] & 0xFF) + (frame[3] & 0xFF) + (frame[4] & 0xFF) + (frame[5] & 0xFF);
         frame[6] = (byte) (sum & 0xFF);
-        ensureUart().writeBytes(frame);
+        AnytoneUart.getObj().writeBytes(frame);
         int expect = AnytoneUart.FRAME_HEADER_LEN + len + 1;
         byte[] resp = readExact(expect, 4000);
         if (ChannelIo.DEBUG) {
@@ -611,7 +599,7 @@ public class CommsThread extends Thread {
         int dataLen = buf.length;
         if (dataLen > 0xFF)
             throw new IllegalArgumentException("buffer demasiado grande: " + dataLen);
-        ensureUart().flushInput();
+        AnytoneUart.getObj().flushInput();
         byte[] frame = new byte[AnytoneUart.FRAME_HEADER_LEN + dataLen + 1];
         frame[0] = 'W';
         frame[1] = (byte) ((addr >> 24) & 0xFF);
@@ -626,7 +614,7 @@ public class CommsThread extends Thread {
         }
         frame[frame.length - 2] = (byte) (sum & 0xFF);
         frame[frame.length - 1] = AnytoneUart.ACK;
-        ensureUart().writeBytes(frame);
+        AnytoneUart.getObj().writeBytes(frame);
         return waitForAck(5000);
     }
 

@@ -16,9 +16,9 @@ import java.util.Arrays;
  * actual AMMD map is confirmed. See ZoneIo for encoding/decoding logic.
  */
 public class Zone {
+    public static boolean changedName;    // UI flag: name edited by user (applies to all zones)
     public String name;            // zone name
     public int[] channelNumbers;   // 1-based channel numbers included in zone (no duplicates ideally)
-    public static boolean changedName;    // UI flag: name edited by user (applies to all zones)
     public boolean changedChannels;// UI flag: membership changed by user
 
     public Zone() {

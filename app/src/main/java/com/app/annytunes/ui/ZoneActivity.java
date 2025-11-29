@@ -29,6 +29,7 @@ import java.util.List;
 
 public class ZoneActivity extends AppCompatActivity {
     private static ZoneActivity instance;
+    private final java.util.HashMap<Integer, com.app.annytunes.uart.zones.Zone> originalZones = new java.util.HashMap<>(); // index->snapshot
     private ListView listZones;
     private Button btnReadZones;
     private Button btnWriteZones; // renamed
@@ -41,7 +42,6 @@ public class ZoneActivity extends AppCompatActivity {
     private ArrayList<Zone> zones;
     private Uri csvUri;
     private int expectedZones;
-    private final java.util.HashMap<Integer, com.app.annytunes.uart.zones.Zone> originalZones = new java.util.HashMap<>(); // index->snapshot
 
     public static ZoneActivity getObj() {
         if (instance == null) throw new IllegalStateException("ZoneActivity not initialized");
@@ -149,6 +149,7 @@ public class ZoneActivity extends AppCompatActivity {
             }
         });
     }
+
     public void onZonesDecoded(List<Zone> decoded, int soFar, int totalExpected) {
         runOnUiThread(() -> {
             if (progZones.getVisibility() != android.view.View.VISIBLE) {

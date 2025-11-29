@@ -17,12 +17,12 @@ public class CsvChannelUtil {
 
     public static void write(List<Channel> list, File f) throws IOException {
         if (list == null) list = List.of();
-	    try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8))) {
+        try (PrintWriter pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8))) {
             pw.println(FULL_HEADER);
             int idx = 1;
             for (Channel c : list) pw.println(row(c, idx++));
-	    }
-	}
+        }
+    }
 
     public static List<Channel> read(File f) throws IOException {
         List<Channel> out = new ArrayList<>();

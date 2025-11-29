@@ -9,18 +9,20 @@
         android:id="@+id/txtStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Status"/>
+        android:text="Status" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
+
         <Button
             android:id="@+id/btnRefreshChannels"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Handshake" />
+
         <Button
             android:id="@+id/btnEnterPcMode"
             android:layout_width="0dp"
@@ -32,14 +34,16 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="12dp">
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
         <Button
             android:id="@+id/btnDownload"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Read"/>
+            android:text="Read" />
+
         <Button
             android:id="@+id/btnUpload"
             android:layout_width="0dp"
@@ -51,14 +55,16 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
         <Button
             android:id="@+id/btnSaveAll"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Save All CSV"/>
+            android:text="Save All CSV" />
+
         <Button
             android:id="@+id/btnSaveChanges"
             android:layout_width="0dp"
@@ -71,9 +77,10 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:layout_marginTop="8dp"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
         <ProgressBar
             android:id="@+id/progressRead"
             style="@android:style/Widget.ProgressBar.Horizontal"
@@ -82,14 +89,15 @@
             android:layout_weight="1"
             android:max="100"
             android:progress="0"
-            android:visibility="gone"/>
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/txtProgressPercent"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="0%"
-            android:visibility="gone"/>
+            android:visibility="gone" />
     </LinearLayout>
 
     <ListView
@@ -98,7 +106,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:divider="@android:color/darker_gray"
-        android:dividerHeight="1dp"/>
+        android:dividerHeight="1dp" />
 
     <LinearLayout
         android:layout_width="match_parent"

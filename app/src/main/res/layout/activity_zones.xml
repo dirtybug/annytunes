@@ -14,8 +14,9 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
         <ProgressBar
             android:id="@+id/progZones"
             style="@android:style/Widget.ProgressBar.Horizontal"
@@ -24,7 +25,8 @@
             android:layout_weight="1"
             android:max="100"
             android:progress="0"
-            android:visibility="gone"/>
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/txtZonePercent"
             android:layout_width="wrap_content"
@@ -37,14 +39,16 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="12dp">
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
         <Button
             android:id="@+id/btnReadZones"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Read Zones" />
+
         <Button
             android:id="@+id/btnWriteZones"
             android:layout_width="0dp"

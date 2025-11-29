@@ -3,6 +3,8 @@
 
     <uses-feature android:name="android.hardware.usb.host" />
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name="com.app.annytunes.AnnytunesApp"
         android:allowBackup="true"
@@ -14,9 +16,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Annytunes">
 
-        <activity android:name="com.app.annytunes.ui.ZoneActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name="com.app.annytunes.ui.ChannelTransferActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name="com.app.annytunes.ui.MainActivity" android:exported="true" android:screenOrientation="portrait">
+        <activity
+            android:name="com.app.annytunes.ui.ZoneActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name="com.app.annytunes.ui.ChannelTransferActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name="com.app.annytunes.ui.MainActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
