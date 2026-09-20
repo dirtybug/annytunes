@@ -6,14 +6,19 @@ android {
     namespace = "com.app.anytunes"
     compileSdk = 35
 
+    val appVersionName = (project.findProperty("versionName") as? String)
+        ?: System.getenv("APP_VERSION_NAME")
+        ?: "1.3.0"
+    val appVersionCode = (project.findProperty("versionCode") as? String)?.toIntOrNull()
+        ?: System.getenv("APP_VERSION_CODE")?.toIntOrNull()
+        ?: 13
+
     defaultConfig {
         applicationId = "com.app.annytunes"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.3"
-
-
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildTypes {
