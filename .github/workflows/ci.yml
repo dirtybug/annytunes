@@ -1,0 +1,235 @@
+name: Annytunes CI/CD - Test, Build & Release
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+      - '*'
+  pull_request:
+    branches:
+      - '**'
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Test & Build in Docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Tag Version for Android Store & Release
+        id: versioning
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            IS_TAG_RELEASE="true"
+          else
+            TAG_NAME="development"
+            IS_TAG_RELEASE="false"
+          fi
+
+          # Clean version without leading 'v' for Google Play Store (e.g. "1.3" or "1.3.0")
+          CLEAN_VERSION="${TAG_NAME#v}"
+          if [[ "$CLEAN_VERSION" == "development" ]]; then
+            CLEAN_VERSION="1.3"
+          fi
+
+          if [[ "$CLEAN_VERSION" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+            MAJ="${BASH_REMATCH[1]}"
+            MIN="${BASH_REMATCH[2]}"
+            PLAY_VERSION_NAME="${MAJ}.${MIN}"
+            CODE=$(( MAJ * 10 + MIN ))
+          elif [[ "$CLEAN_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJ="${BASH_REMATCH[1]}"
+            MIN="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            PLAY_VERSION_NAME="${MAJ}.${MIN}.${PATCH}"
+            CODE=$(( MAJ * 100 + MIN * 10 + PATCH ))
+          else
+            PLAY_VERSION_NAME="$CLEAN_VERSION"
+            CODE=3
+          fi
+
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "VERSION=$TAG_NAME" >> $GITHUB_ENV
+          echo "APP_VERSION_NAME=$PLAY_VERSION_NAME" >> $GITHUB_ENV
+          echo "APP_VERSION_CODE=$CODE" >> $GITHUB_ENV
+          echo "IS_TAG_RELEASE=$IS_TAG_RELEASE" >> $GITHUB_ENV
+          if [[ "$IS_TAG_RELEASE" == "true" ]]; then
+            echo "TARGET_DIR=release/${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "TARGET_DIR=release/development" >> $GITHUB_ENV
+          fi
+
+          echo "====================================================="
+          echo "🏷️ Git Tag / Version:     $TAG_NAME"
+          echo "📱 Android Store Name:    $PLAY_VERSION_NAME"
+          echo "🔢 Android Store Code:    $CODE"
+          echo "🚀 Is Tag Release:        $IS_TAG_RELEASE"
+          echo "====================================================="
+
+      - name: Validate Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_NAME="${{ env.TAG_NAME }}"
+          echo "Processing build for tag: '${TAG_NAME}'"
+
+      - name: Update Android Manifest XML for Google Play Store
+        run: |
+          echo ">>> Updating app/src/main/AndroidManifest.xml with Play Store version ${{ env.APP_VERSION_NAME }} (code: ${{ env.APP_VERSION_CODE }})..."
+          sed -i -E "s/android:versionName=\"[^\"]*\"/android:versionName=\"${{ env.APP_VERSION_NAME }}\"/g" app/src/main/AndroidManifest.xml || true
+          sed -i -E "s/android:versionCode=\"[^\"]*\"/android:versionCode=\"${{ env.APP_VERSION_CODE }}\"/g" app/src/main/AndroidManifest.xml || true
+
+      - name: Restore Keystore from Secrets for Release Signing
+        run: |
+          mkdir -p release
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo ">>> Restoring release/key.jks from GitHub Secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release/key.jks
+            STORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "${STORE_PASS:-imcool}" > release/keystore-pass.txt
+            echo "✓ Keystore restored successfully from Secrets."
+          elif [ -f "release/key.jks" ]; then
+            echo "✓ Local key.jks detected."
+          else
+            echo "ℹ️ No KEYSTORE_BASE64 secret provided; proceeding with unsigned build."
+          fi
+
+      - name: Build Docker Container
+        run: docker compose build
+
+      - name: Run Tests and Build Deliverables in Docker
+        run: |
+          echo ">>> Running Tests and Building Deliverables in Docker (Version: ${{ env.APP_VERSION_NAME }}, Code: ${{ env.APP_VERSION_CODE }})..."
+          STORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+          APP_VERSION_NAME="${{ env.APP_VERSION_NAME }}" \
+          APP_VERSION_CODE="${{ env.APP_VERSION_CODE }}" \
+          KEYSTORE_PASSWORD="${STORE_PASS:-imcool}" \
+          KEY_ALIAS="${{ secrets.KEY_ALIAS || 'key0' }}" \
+          docker compose run --rm test-all
+          sudo chown -R $USER:$USER release/
+
+      - name: Organize Release Artifacts
+        run: |
+          VERSION="${{ env.VERSION }}"
+          echo "Organizing release artifacts for Version: ${VERSION}"
+
+          if [[ "$IS_TAG_RELEASE" == "true" ]]; then
+            TARGET_DIR="release/${VERSION}"
+          else
+            TARGET_DIR="release/development"
+          fi
+          echo "TARGET_DIR=${TARGET_DIR}" >> $GITHUB_ENV
+          mkdir -p "${TARGET_DIR}/reports"
+
+          # 1. Ensure Release APK is present in TARGET_DIR with versioned name
+          if [ -f "release/development/Annytunes-release.apk" ]; then
+            cp -f "release/development/Annytunes-release.apk" "${TARGET_DIR}/Annytunes-${VERSION}.apk" 2>/dev/null || true
+            if [ "${TARGET_DIR}" != "release/development" ]; then
+              cp -f "release/development/Annytunes-release.apk" "${TARGET_DIR}/Annytunes-release.apk" 2>/dev/null || true
+            fi
+          elif [ -f "release/development/Annytunes-development-release.apk" ]; then
+            cp -f "release/development/Annytunes-development-release.apk" "${TARGET_DIR}/Annytunes-${VERSION}.apk" 2>/dev/null || true
+            if [ "${TARGET_DIR}" != "release/development" ]; then
+              cp -f "release/development/Annytunes-development-release.apk" "${TARGET_DIR}/Annytunes-release.apk" 2>/dev/null || true
+            fi
+          fi
+
+          # 2. Ensure Release AAB is present in TARGET_DIR with versioned name
+          if [ -f "release/development/Annytunes-release.aab" ]; then
+            cp -f "release/development/Annytunes-release.aab" "${TARGET_DIR}/Annytunes-${VERSION}.aab" 2>/dev/null || true
+            if [ "${TARGET_DIR}" != "release/development" ]; then
+              cp -f "release/development/Annytunes-release.aab" "${TARGET_DIR}/Annytunes-release.aab" 2>/dev/null || true
+            fi
+          fi
+
+          # 3. Ensure Test Reports are copied to TARGET_DIR
+          if [ -d "release/development/reports" ] && [ "${TARGET_DIR}" != "release/development" ]; then
+            cp -r release/development/reports/* "${TARGET_DIR}/reports/" 2>/dev/null || true
+          fi
+
+          # 4. Create zip archives for test reports
+          if [ -d "${TARGET_DIR}/reports" ]; then
+            (cd "${TARGET_DIR}" && python3 -m zipfile -c "Annytunes-${VERSION}-test-reports.zip" reports 2>/dev/null || zip -r "Annytunes-${VERSION}-test-reports.zip" reports 2>/dev/null || true)
+          fi
+
+          # 5. Prepare clean flat staging directory for GitHub Actions Artifacts
+          rm -rf staging && mkdir -p staging/reports
+          [ -f "${TARGET_DIR}/Annytunes-${VERSION}.apk" ] && cp -f "${TARGET_DIR}/Annytunes-${VERSION}.apk" staging/
+          [ -f "${TARGET_DIR}/Annytunes-${VERSION}.aab" ] && cp -f "${TARGET_DIR}/Annytunes-${VERSION}.aab" staging/
+          if [ -d "${TARGET_DIR}/reports" ]; then
+            cp -r "${TARGET_DIR}/reports/"* staging/reports/ 2>/dev/null || true
+          fi
+
+          echo "=== ARTIFACTS IN ${TARGET_DIR} ==="
+          ls -lh "${TARGET_DIR}/"*.apk 2>/dev/null || true
+          ls -lh "${TARGET_DIR}/"*.aab 2>/dev/null || true
+          ls -lh "${TARGET_DIR}/"*.zip 2>/dev/null || true
+          ls -lh "${TARGET_DIR}/reports/" 2>/dev/null || true
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Annytunes-${{ env.VERSION }}-apk
+          path: staging/Annytunes-${{ env.VERSION }}.apk
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload Release AAB Bundle Artifact (on Tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Annytunes-${{ env.VERSION }}-aab
+          path: staging/Annytunes-${{ env.VERSION }}.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload Test Report Artifact (HTML)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Annytunes-${{ env.VERSION }}-test-reports
+          path: staging/reports
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Create or Update GitHub Release (on Tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Annytunes ${{ env.VERSION }}"
+          tag_name: ${{ env.VERSION }}
+          body: |
+            ## 🚀 Annytunes Official Release ${{ env.VERSION }}
+            - **Google Play Store Version Name (`versionName`):** `${{ env.APP_VERSION_NAME }}`
+            - **Google Play Store Version Code (`versionCode`):** `${{ env.APP_VERSION_CODE }}`
+            - **Application ID / Package Name:** `com.app.annytunes`
+            - **Target SDK:** Android 16 (API 36)
+            - **Min SDK:** Android 12 (API 31)
+            - **Git Commit:** `${{ github.sha }}`
+            - **Test Suite:** 100% Passed
+
+            ### 📦 Release Deliverables
+            - **`Annytunes-${{ env.VERSION }}.aab`**: Google Play Store Android App Bundle.
+            - **`Annytunes-${{ env.VERSION }}.apk`**: Android APK installer package.
+            - **`Annytunes-${{ env.VERSION }}-test-reports.zip`**: Test execution reports.
+          files: |
+            release/${{ env.VERSION }}/Annytunes-${{ env.VERSION }}.apk
+            release/${{ env.VERSION }}/Annytunes-${{ env.VERSION }}.aab
+            release/${{ env.VERSION }}/Annytunes-${{ env.VERSION }}-test-reports.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

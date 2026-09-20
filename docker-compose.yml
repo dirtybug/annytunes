@@ -1,0 +1,131 @@
+services:
+  # Interactive Development Shell (run ./gradlew, compile, test, debug)
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-dev:latest
+    container_name: annytunes-dev
+    stdin_open: true
+    tty: true
+    environment:
+      - APP_VERSION_NAME
+      - APP_VERSION_CODE
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["dev"]
+
+  # Service to run Unit Tests
+  test-unit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-test:latest
+    container_name: annytunes-unit-tests
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    command: ["unit"]
+
+  # Service to build debug and test APKs
+  build-apk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-test:latest
+    container_name: annytunes-build
+    environment:
+      - APP_VERSION_NAME
+      - APP_VERSION_CODE
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    command: ["build"]
+
+  # Service to build Release APK and AAB for Google Play Store
+  build-release:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-test:latest
+    container_name: annytunes-release
+    environment:
+      - APP_VERSION_NAME
+      - APP_VERSION_CODE
+      - KEYSTORE_PASSWORD
+      - KEY_ALIAS
+      - KEY_PASSWORD
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    command: ["release"]
+
+  # Service to run Android instrumented tests
+  test-instrumented:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-test:latest
+    container_name: annytunes-instrumented-tests
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["connected"]
+
+  # Service to run full suite (unit tests, APK build, release deliverables)
+  test-all:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: annytunes-test:latest
+    container_name: annytunes-all-tests
+    environment:
+      - APP_VERSION_NAME
+      - APP_VERSION_CODE
+      - KEYSTORE_PASSWORD
+      - KEY_ALIAS
+      - KEY_PASSWORD
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["all"]
+
+  # Service to run Android Studio with complete GUI (in-browser noVNC and native VNC)
+  android-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.android-studio
+    image: annytunes-android-studio:latest
+    container_name: annytunes-android-studio
+    environment:
+      - RESOLUTION=1600x900
+      - DISPLAY=:1
+    ports:
+      - "6080:6080" # Web Browser GUI (noVNC)
+      - "5900:5900" # Native VNC Client
+    volumes:
+      - .:/workspace
+      - studio-gradle-cache:/root/.gradle
+      - studio-config:/root/.config/Google
+      - studio-share:/root/.local/share/Google
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stdin_open: true
+    tty: true
+
+volumes:
+  gradle-cache:
+    name: annytunes-gradle-cache
+  studio-gradle-cache:
+    name: annytunes-studio-gradle-cache
+  studio-config:
+    name: annytunes-studio-config
+  studio-share:
+    name: annytunes-studio-share

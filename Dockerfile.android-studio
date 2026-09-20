@@ -1,0 +1,90 @@
+FROM eclipse-temurin:17-jdk-jammy
+
+LABEL maintainer="Annytunes Team"
+LABEL description="Annytunes Android Studio GUI Container (Web noVNC + VNC)"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:/opt/android-studio/bin
+
+# 1. Install base utilities, X11, desktop environment, and noVNC
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    curl \
+    wget \
+    unzip \
+    tar \
+    git \
+    vim \
+    nano \
+    less \
+    procps \
+    net-tools \
+    python3 \
+    python3-pip \
+    xvfb \
+    x11vnc \
+    openbox \
+    novnc \
+    websockify \
+    dbus-x11 \
+    x11-xserver-utils \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+    libxi6 \
+    libxrandr2 \
+    libxcursor1 \
+    libxcomposite1 \
+    libasound2 \
+    libgl1 \
+    libpulse0 \
+    fonts-dejavu-core \
+    fonts-noto-core \
+    fonts-roboto \
+    && rm -rf /var/lib/apt/lists/*
+
+# Symlink noVNC index.html so root URL opens directly
+RUN ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+
+# 2. Download and install Android SDK Commandline Tools (version 15859902)
+ARG CMDLINE_TOOLS_URL=https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
+    wget -q ${CMDLINE_TOOLS_URL} -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools && \
+    mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
+
+# Pre-accept all Android SDK licenses and install packages (API 35 & 36, build-tools 35.0.0 & 36.0.0)
+RUN yes | sdkmanager --licenses && \
+    sdkmanager --install \
+        "platform-tools" \
+        "platforms;android-35" \
+        "platforms;android-36" \
+        "build-tools;35.0.0" \
+        "build-tools;36.0.0"
+
+# 3. Download and install Android Studio IDE
+ARG STUDIO_URL=https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2024.2.1.11/android-studio-2024.2.1.11-linux.tar.gz
+RUN echo "Downloading Android Studio IDE from ${STUDIO_URL}..." && \
+    mkdir -p /opt && \
+    wget -q --show-progress --progress=bar:force:noscroll "${STUDIO_URL}" -O /tmp/android-studio.tar.gz && \
+    tar -xzf /tmp/android-studio.tar.gz -C /opt && \
+    rm -f /tmp/android-studio.tar.gz && \
+    ln -s /opt/android-studio/bin/studio.sh /usr/local/bin/studio
+
+# Set working directory
+WORKDIR /workspace
+
+# Install entrypoint script
+COPY docker-studio-entrypoint.sh /usr/local/bin/docker-studio-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-studio-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-studio-entrypoint.sh
+
+# Expose noVNC web port (6080) and VNC port (5900)
+EXPOSE 6080 5900
+
+ENTRYPOINT ["/usr/local/bin/docker-studio-entrypoint.sh"]
+CMD ["studio"]
