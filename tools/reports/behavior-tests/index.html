@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annytunes • Visual Frame Verification & Behavior Gallery</title>
+    <style>
+        :root { --bg: #0E1117; --card: #1A202C; --border: #323D52; --text: #F7FAFC; --accent: #14B8A6; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; padding: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .card img { width: 100%; height: auto; display: block; }
+        .card-body { padding: 16px; }
+        .card-title { font-size: 16px; font-weight: bold; margin-bottom: 6px; color: var(--accent); }
+        .card-desc { font-size: 13px; color: #A0AEC0; }
+        .badge { display: inline-block; background: #065F46; color: #34D399; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div>
+            <h1>Annytunes • Visual Frame Gallery</h1>
+            <p style="color:#A0AEC0;">Automated verification of UI activities and widgets</p>
+        </div>
+        <div style="background:#065F46; color:#34D399; padding:8px 16px; border-radius:20px; font-weight:bold;">? 6 Frames Verified</div>
+    </header>
+    <div class="grid">
+        <div class="card">
+            <img src="../../screenshots/frame_01_usb_connection.png" alt="01. USB Device Connection">
+            <div class="card-body">
+                <div class="card-title">01. USB Device Connection</div>
+                <div class="card-desc">Device discovery, CDC-ACM / FTDI enumeration, and Connect button.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+        <div class="card">
+            <img src="../../screenshots/frame_02_channel_transfer.png" alt="02. Channel Transfer & Codeplug">
+            <div class="card-body">
+                <div class="card-title">02. Channel Transfer & Codeplug</div>
+                <div class="card-desc">Handshake, PC mode, Read/Write all memory banks, CSV export, and channel listing.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+        <div class="card">
+            <img src="../../screenshots/frame_03_channel_edit_dialog.png" alt="03. Channel Edit Dialog">
+            <div class="card-body">
+                <div class="card-title">03. Channel Edit Dialog</div>
+                <div class="card-desc">Modal channel parameter editor with name, frequencies, color code, timeslot, and admit criteria.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+        <div class="card">
+            <img src="../../screenshots/frame_04_zone_management.png" alt="04. Zone Management">
+            <div class="card-body">
+                <div class="card-title">04. Zone Management</div>
+                <div class="card-desc">Grouping of channels into zones, read/write zone memory, and CSV export.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+        <div class="card">
+            <img src="../../screenshots/frame_05_flutter_channel_edit_sheet.png" alt="05. Flutter Channel Edit Sheet">
+            <div class="card-body">
+                <div class="card-title">05. Flutter Channel Edit Sheet</div>
+                <div class="card-desc">Modern Material 3 bottom sheet with animated DMR toggles and validation.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+        <div class="card">
+            <img src="../../screenshots/frame_06_material3_theme_and_widgets.png" alt="06. Material 3 Widgets Showcase">
+            <div class="card-body">
+                <div class="card-title">06. Material 3 Widgets Showcase</div>
+                <div class="card-desc">FrequencyText, ChannelModeChip, PowerLevelIndicator, and ProgressOverlay.</div>
+                <div class="badge">VERIFIED</div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
