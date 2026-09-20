@@ -4,38 +4,28 @@ echo ====================================================
 echo            Annytunes - Docker Test Runner          
 echo ====================================================
 
+setlocal enabledelayedexpansion
+
 set TARGET=%1
 if "%TARGET%"=="" set TARGET=all
 
-REM Determine whether to run directly or via WSL2
+REM Check if native Docker daemon is responding
+docker ps >nul 2>nul
+if !errorlevel! equ 0 goto :DOCKER_READY
+
+REM If Windows Docker is not active, check WSL2 Docker engine
 where wsl >nul 2>nul
-if %errorlevel% equ 0 (
-    wsl -l -v | findstr /i "docker-desktop" | findstr /i "Running" >nul 2>nul
-    if %errorlevel% neq 0 (
+if !errorlevel! equ 0 (
+    wsl -d Ubuntu docker ps >nul 2>nul
+    if !errorlevel! equ 0 (
         echo [INFO] Windows Docker Desktop is not active. Running via WSL2 Docker engine...
         wsl -d Ubuntu --cd "%~dp0" -e ./run-docker-tests.sh %TARGET%
         goto :SUMMARY
     )
 )
 
-where docker >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Docker not found in PATH. Please install Docker Desktop.
-    exit /b 1
-)
-
-docker ps >nul 2>nul
-if %errorlevel% equ 0 goto :DOCKER_READY
-
-where wsl >nul 2>nul
-if %errorlevel% equ 0 (
-    echo [INFO] Windows Docker Desktop not active. Running via WSL Docker engine...
-    wsl -d Ubuntu --cd "%~dp0" -e ./run-docker-tests.sh %TARGET%
-    goto :SUMMARY
-)
-
-echo [ERROR] Docker Desktop is not running or the engine is still initializing.
-echo Please open Docker Desktop and wait for "Engine running" status before running tests.
+echo [ERROR] Docker daemon is not running on Windows or in WSL2 Ubuntu.
+echo Please open Docker Desktop or start Docker inside WSL2 before running tests.
 exit /b 1
 
 :DOCKER_READY
