@@ -21,9 +21,50 @@ android {
         versionName = appVersionName
     }
 
+    signingConfigs {
+        create("release") {
+            val passFile1 = rootProject.file("release/keystore-pass.txt")
+            val passFile2 = rootProject.file("keystore-pass.txt")
+            val passFile3 = file("keystore-pass.txt")
+            val passFromFile = when {
+                passFile1.exists() -> passFile1.readText().trim()
+                passFile2.exists() -> passFile2.readText().trim()
+                passFile3.exists() -> passFile3.readText().trim()
+                else -> null
+            }
+            val finalPassword = passFromFile
+                ?: (project.findProperty("keystorePassword") as? String)
+                ?: System.getenv("KEYSTORE_PASSWORD")
+
+            val candidateFiles = listOf(
+                rootProject.file("release/key.jks"),
+                rootProject.file("release/release.keystore"),
+                file("release.keystore"),
+                file("release/release.keystore")
+            )
+            val storeF = candidateFiles.firstOrNull { it.exists() }
+            val alias = (project.findProperty("keyAlias") as? String)
+                ?: System.getenv("KEY_ALIAS")
+                ?: "key0"
+
+            if (storeF != null && !finalPassword.isNullOrBlank()) {
+                storeFile = storeF
+                storePassword = finalPassword
+                keyAlias = alias
+                keyPassword = finalPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            val releaseSigning = signingConfigs.getByName("release")
+            if (releaseSigning.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                signingConfig = releaseSigning
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
