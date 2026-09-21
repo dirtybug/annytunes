@@ -383,17 +383,28 @@ public class ChannelTransferActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(android.view.Menu menu) {
         menu.add(0, 1, 0, "Zones");
         menu.add(0, 2, 0, "Compare Channels"); // Added menu item for comparing channels
+        getMenuInflater().inflate(R.menu.main_menu, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(android.view.MenuItem item) {
-        if (item.getItemId() == 1) {
+        int id = item.getItemId();
+        if (id == 1) {
             startActivity(new android.content.Intent(this, ZoneActivity.class));
             return true;
-        } else if (item.getItemId() == 2) {
+        } else if (id == 2) {
             // Trigger the FetchAndCompareChannelsTask
             new FetchAndCompareChannelsTask(this, channels).execute();
+            return true;
+        } else if (id == R.id.menu_git) {
+            AboutDialog.openUrl(this, AboutDialog.GIT_URL);
+            return true;
+        } else if (id == R.id.menu_contributions) {
+            AboutDialog.openUrl(this, AboutDialog.CONTRIBUTORS_URL);
+            return true;
+        } else if (id == R.id.menu_about) {
+            AboutDialog.show(this);
             return true;
         }
         return super.onOptionsItemSelected(item);

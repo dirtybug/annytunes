@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu>
-    <!-- Define your menu items here -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/menu_git"
+        android:title="@string/menu_git"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/menu_contributions"
+        android:title="@string/menu_contributions"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/menu_about"
+        android:title="@string/menu_about"
+        app:showAsAction="never" />
 </menu>
 

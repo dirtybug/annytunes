@@ -368,4 +368,26 @@ public class ZoneActivity extends AppCompatActivity {
             if (btnWriteZones != null) btnWriteZones.setEnabled(true);
         });
     }
+
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.menu_git) {
+            AboutDialog.openUrl(this, AboutDialog.GIT_URL);
+            return true;
+        } else if (id == R.id.menu_contributions) {
+            AboutDialog.openUrl(this, AboutDialog.CONTRIBUTORS_URL);
+            return true;
+        } else if (id == R.id.menu_about) {
+            AboutDialog.show(this);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
 }

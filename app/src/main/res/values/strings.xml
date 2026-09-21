@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">annytunes</string>
+    <string name="menu_zones">Zones</string>
+    <string name="menu_compare_channels">Compare Channels</string>
+    <string name="menu_git">Git Source Code</string>
+    <string name="menu_contributions">Contributions</string>
+    <string name="menu_about">About</string>
+    <string name="about_title">About Annytunes</string>
+    <string name="about_close">Close</string>
+    <string name="about_open_git">Open GitHub</string>
+    <string name="about_view_contributions">Contributors</string>
 </resources>

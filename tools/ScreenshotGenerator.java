@@ -80,10 +80,14 @@ public class ScreenshotGenerator {
             File f6 = new File(outputDir, "frame_06_material3_theme_and_widgets.png");
             renderFrame6Material3ThemeAndWidgets(f6);
 
+            // Frame 7: About & Contributions Dropdown Dialog
+            File f7 = new File(outputDir, "frame_07_about_and_contributions_dialog.png");
+            renderFrame7AboutAndContributionsDialog(f7);
+
             // Generate HTML Gallery Report
             generateHtmlReport(outputDir);
 
-            System.out.println("✓ Successfully generated all 6 visual frames and report!");
+            System.out.println("✓ Successfully generated all 7 visual frames and report!");
             System.out.println("=====================================================");
         } catch (Exception e) {
             System.err.println("Error generating screenshots: " + e.getMessage());
@@ -704,6 +708,171 @@ public class ScreenshotGenerator {
         ImageIO.write(img, "png", file);
     }
 
+    // -------------------------------------------------------------
+    // FRAME 7: About & Contributions Dropdown Dialog
+    // -------------------------------------------------------------
+    private static void renderFrame7AboutAndContributionsDialog(File file) throws Exception {
+        BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = createGraphics(img);
+
+        // Draw Frame 1 as background
+        renderFrame1UsbConnection(file);
+        BufferedImage base = ImageIO.read(file);
+        g.drawImage(base, 0, 0, null);
+
+        // Dim background
+        g.setColor(new Color(0, 0, 0, 195));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Draw Dropdown Menu at Top Right (below app bar)
+        int menuW = 200;
+        int menuH = 135;
+        int menuX = WIDTH - menuW - 16;
+        int menuY = 88;
+
+        g.setColor(COLOR_CARD);
+        g.fillRoundRect(menuX, menuY, menuW, menuH, 8, 8);
+        g.setColor(COLOR_CARD_BORDER);
+        g.drawRoundRect(menuX, menuY, menuW, menuH, 8, 8);
+
+        // Dropdown Items
+        String[] menuItems = {"Git Source Code", "Contributions", "About"};
+        int miY = menuY + 26;
+        for (int i = 0; i < menuItems.length; i++) {
+            if (i == 2) {
+                // Highlight About item
+                g.setColor(new Color(0x14, 0xB8, 0xA6, 50));
+                g.fillRect(menuX + 1, miY - 18, menuW - 2, 36);
+                g.setColor(COLOR_TEAL_BRIGHT);
+                g.setFont(new Font("SansSerif", Font.BOLD, 13));
+            } else {
+                g.setColor(COLOR_TEXT_WHITE);
+                g.setFont(new Font("SansSerif", Font.PLAIN, 13));
+            }
+            g.drawString(menuItems[i], menuX + 16, miY);
+            if (i < menuItems.length - 1) {
+                g.setColor(COLOR_CARD_BORDER);
+                g.drawLine(menuX + 8, miY + 12, menuX + menuW - 8, miY + 12);
+            }
+            miY += 38;
+        }
+
+        // About Dialog Card in Center
+        int diaW = WIDTH - 48;
+        int diaH = 520;
+        int diaX = 24;
+        int diaY = 240;
+
+        g.setColor(COLOR_SURFACE);
+        g.fillRoundRect(diaX, diaY, diaW, diaH, 16, 16);
+        g.setColor(COLOR_CARD_BORDER);
+        g.drawRoundRect(diaX, diaY, diaW, diaH, 16, 16);
+
+        // Header Title with Icon Badge
+        g.setColor(COLOR_TEAL);
+        g.fillRoundRect(diaX + 24, diaY + 24, 38, 38, 8, 8);
+        g.setColor(COLOR_TEXT_WHITE);
+        g.setFont(new Font("SansSerif", Font.BOLD, 22));
+        g.drawString("A", diaX + 34, diaY + 52);
+
+        g.setColor(COLOR_TEXT_WHITE);
+        g.setFont(new Font("SansSerif", Font.BOLD, 20));
+        g.drawString("About Annytunes", diaX + 74, diaY + 44);
+
+        g.setColor(COLOR_TEAL_BRIGHT);
+        g.setFont(new Font("SansSerif", Font.BOLD, 13));
+        g.drawString("v1.3.0  •  Open Source DMR Radio Tool", diaX + 74, diaY + 62);
+
+        // Divider
+        g.setColor(COLOR_CARD_BORDER);
+        g.drawLine(diaX + 24, diaY + 76, diaX + diaW - 24, diaY + 76);
+
+        int curY = diaY + 102;
+
+        // Git Repository Box
+        g.setColor(COLOR_CARD);
+        g.fillRoundRect(diaX + 24, curY, diaW - 48, 62, 8, 8);
+        g.setColor(COLOR_CARD_BORDER);
+        g.drawRoundRect(diaX + 24, curY, diaW - 48, 62, 8, 8);
+
+        g.setColor(COLOR_TEXT_GREY);
+        g.setFont(new Font("SansSerif", Font.BOLD, 11));
+        g.drawString("GIT REPOSITORY", diaX + 36, curY + 22);
+
+        g.setColor(COLOR_TEAL_BRIGHT);
+        g.setFont(new Font("Monospaced", Font.BOLD, 13));
+        g.drawString("https://github.com/dirtybug/annytunes", diaX + 36, curY + 44);
+
+        curY += 80;
+
+        // Contributors Section
+        g.setColor(COLOR_TEXT_WHITE);
+        g.setFont(new Font("SansSerif", Font.BOLD, 14));
+        g.drawString("Contributors & Credits", diaX + 24, curY);
+        curY += 22;
+
+        String[][] authors = {
+            {"dirtybug", "Project founder & DMR UART protocol"},
+            {"J. Andrade", "Docker CI/CD, tests & release automation"},
+            {"jcalado", "Material 3 UI, CSV services & widgets"},
+            {"felHR85", "UsbSerial Android driver library"}
+        };
+
+        for (String[] author : authors) {
+            g.setColor(COLOR_TEAL_BRIGHT);
+            g.fillOval(diaX + 28, curY - 9, 6, 6);
+
+            g.setColor(COLOR_TEXT_WHITE);
+            g.setFont(new Font("SansSerif", Font.BOLD, 12));
+            g.drawString(author[0], diaX + 42, curY - 3);
+
+            g.setColor(COLOR_TEXT_MUTED);
+            g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g.drawString(" — " + author[1], diaX + 42 + g.getFontMetrics(new Font("SansSerif", Font.BOLD, 12)).stringWidth(author[0]), curY - 3);
+
+            curY += 26;
+        }
+
+        curY += 8;
+
+        // Contribution Callout
+        g.setColor(new Color(0x14, 0xB8, 0xA6, 25));
+        g.fillRoundRect(diaX + 24, curY, diaW - 48, 48, 6, 6);
+        g.setColor(new Color(0x14, 0xB8, 0xA6, 120));
+        g.drawRoundRect(diaX + 24, curY, diaW - 48, 48, 6, 6);
+
+        g.setColor(COLOR_TEXT_WHITE);
+        g.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        g.drawString("Contributions are welcome! Submit PRs, bug reports, and", diaX + 36, curY + 20);
+        g.drawString("feature requests directly on GitHub.", diaX + 36, curY + 36);
+
+        // Buttons at Bottom
+        int btnY = diaY + diaH - 56;
+
+        // Button: OPEN GITHUB
+        g.setColor(COLOR_TEAL);
+        g.fillRoundRect(diaX + 24, btnY, 125, 36, 8, 8);
+        g.setColor(COLOR_TEXT_WHITE);
+        g.setFont(new Font("SansSerif", Font.BOLD, 11));
+        g.drawString("OPEN GITHUB", diaX + 40, btnY + 22);
+
+        // Button: CONTRIBUTORS
+        g.setColor(COLOR_CARD);
+        g.fillRoundRect(diaX + 158, btnY, 130, 36, 8, 8);
+        g.setColor(COLOR_CARD_BORDER);
+        g.drawRoundRect(diaX + 158, btnY, 130, 36, 8, 8);
+        g.setColor(COLOR_TEXT_WHITE);
+        g.drawString("CONTRIBUTORS", diaX + 172, btnY + 22);
+
+        // Button: CLOSE
+        g.setColor(COLOR_TEXT_GREY);
+        g.setFont(new Font("SansSerif", Font.BOLD, 12));
+        g.drawString("CLOSE", diaX + diaW - 74, btnY + 22);
+
+        g.dispose();
+        ImageIO.write(img, "png", file);
+    }
+
     private static void generateHtmlReport(File screenshotDir) {
         try {
             File reportDir = new File("tools/reports/behavior-tests");
@@ -730,7 +899,7 @@ public class ScreenshotGenerator {
             sb.append("    </style>\n</head>\n<body>\n<div class=\"container\">\n");
             sb.append("    <header>\n");
             sb.append("        <div>\n            <h1>Annytunes • Visual Frame Gallery</h1>\n            <p style=\"color:#A0AEC0;\">Automated verification of UI activities and widgets</p>\n        </div>\n");
-            sb.append("        <div style=\"background:#065F46; color:#34D399; padding:8px 16px; border-radius:20px; font-weight:bold;\">✔ 6 Frames Verified</div>\n");
+            sb.append("        <div style=\"background:#065F46; color:#34D399; padding:8px 16px; border-radius:20px; font-weight:bold;\">✔ 7 Frames Verified</div>\n");
             sb.append("    </header>\n    <div class=\"grid\">\n");
 
             String[][] frames = {
@@ -739,7 +908,8 @@ public class ScreenshotGenerator {
                 {"frame_03_channel_edit_dialog.png", "03. Channel Edit Dialog", "Modal channel parameter editor with name, frequencies, color code, timeslot, and admit criteria."},
                 {"frame_04_zone_management.png", "04. Zone Management", "Grouping of channels into zones, read/write zone memory, and CSV export."},
                 {"frame_05_flutter_channel_edit_sheet.png", "05. Flutter Channel Edit Sheet", "Modern Material 3 bottom sheet with animated DMR toggles and validation."},
-                {"frame_06_material3_theme_and_widgets.png", "06. Material 3 Widgets Showcase", "FrequencyText, ChannelModeChip, PowerLevelIndicator, and ProgressOverlay."}
+                {"frame_06_material3_theme_and_widgets.png", "06. Material 3 Widgets Showcase", "FrequencyText, ChannelModeChip, PowerLevelIndicator, and ProgressOverlay."},
+                {"frame_07_about_and_contributions_dialog.png", "07. About & Contributions Dialog", "Dropdown menu item and modal dialog with Git repository link, authors, and contribution guide."}
             };
 
             for (String[] f : frames) {
