@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-6 \
     file \
     sed \
+    fontconfig \
+    fonts-dejavu-core \
+    libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure developer convenience aliases

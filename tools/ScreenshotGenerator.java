@@ -46,6 +46,7 @@ public class ScreenshotGenerator {
     private static final Color COLOR_BLUE = new Color(0x3B, 0x82, 0xF6);
 
     public static void main(String[] args) {
+        System.setProperty("java.awt.headless", "true");
         String outputDirPath = args.length > 0 ? args[0] : "release/development/screenshots";
         File outputDir = new File(outputDirPath);
         outputDir.mkdirs();
@@ -924,10 +925,18 @@ public class ScreenshotGenerator {
 
             sb.append("    </div>\n</div>\n</body>\n</html>\n");
 
-            FileWriter fw = new FileWriter(htmlFile);
-            fw.write(sb.toString());
-            fw.close();
+            try (FileWriter fw = new FileWriter(htmlFile)) {
+                fw.write(sb.toString());
+            }
             System.out.println("✓ HTML behavior test report saved to " + htmlFile.getAbsolutePath());
+
+            // Also write self-contained gallery directly into screenshotDir
+            File galleryFile = new File(screenshotDir, "index.html");
+            String selfContainedHtml = sb.toString().replace("../../screenshots/", "");
+            try (FileWriter fw2 = new FileWriter(galleryFile)) {
+                fw2.write(selfContainedHtml);
+            }
+            System.out.println("✓ Standalone screenshot gallery saved to " + galleryFile.getAbsolutePath());
         } catch (Exception e) {
             System.err.println("Failed to write HTML report: " + e.getMessage());
         }

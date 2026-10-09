@@ -91,5 +91,8 @@ if exist ".\release\development\Annytunes-debug.apk" (
 if exist ".\release\development\reports\" (
     echo   - Test Reports:          .\release\development\reports\
 )
+if exist ".\release\development\screenshots\" (
+    echo   - Visual Screenshots:   .\release\development\screenshots\
+)
 echo ====================================================
 echo Completed successfully!
